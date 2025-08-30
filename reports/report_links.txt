@@ -1,0 +1,55 @@
+REPORTS API ENDPOINTS
+
+Base URL: http://localhost:5000/reports
+
+1. Sales Report
+   GET /reports/sales
+
+2. Stock Report
+   GET /reports/stock
+
+3. Profit & Loss Report
+   GET /reports/profit-loss
+
+4. Dashboard Report
+   GET /reports/dashboard
+
+5. List All Reports
+   GET /reports/
+
+6. Sales Without Invoice Report
+   GET /reports/sales-no-invoice
+
+7. Invoices Report
+   GET /reports/invoices
+
+8. Purchases Report
+   GET /reports/purchases
+
+9. Stock Movement Report
+   GET /reports/stock-movement
+   Parameters:
+   - location (optional): Filter by customer branch/location
+   - date_from (optional): Start date (YYYY-MM-DD)
+   - date_to (optional): End date (YYYY-MM-DD)
+   
+   Examples:
+   - GET /reports/stock-movement
+   - GET /reports/stock-movement?location=Mumbai
+   - GET /reports/stock-movement?date_from=2024-01-01&date_to=2024-01-31
+   - GET /reports/stock-movement?location=Delhi&date_from=2024-01-01
+
+10. Reorder Report
+    GET /reports/reorder
+    Shows products that need to be reordered based on current stock vs reorder level
+    
+    Example:
+    - GET /reports/reorder
+
+10. Generate Custom Report
+    POST /reports/generate
+    Body: {
+      "report_type": "sales" or "stock",
+      "start_date": "YYYY-MM-DD",
+      "end_date": "YYYY-MM-DD"
+    }

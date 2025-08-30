@@ -1,0 +1,31 @@
+Invoice Module API Links
+========================
+
+📄 INVOICES (/invoices)
+├── Invoice List: http://localhost:5000/invoices/
+├── Invoice Details: http://localhost:5000/invoices/{id}
+├── Customer Invoices: http://localhost:5000/invoices/customer/{customer_id}
+└── Export Invoices: http://localhost:5000/invoices/export
+
+GET Requests:
+- List all invoices: http://localhost:5000/invoices/
+- Filter by customer: http://localhost:5000/invoices/?customer=name
+- Filter by date: http://localhost:5000/invoices/?date_from=2025-01-01&date_to=2025-01-31
+- Search invoices: http://localhost:5000/invoices/search?q=searchterm
+- Filter by status: http://localhost:5000/invoices/filter?status=paid
+- Customer invoices: http://localhost:5000/invoices/customer/{customer_id}
+- Filter customer invoices: http://localhost:5000/invoices/customer/{customer_id}/?payment_status=paid
+- Export as CSV: http://localhost:5000/invoices/export?format=csv
+- Export as Excel: http://localhost:5000/invoices/export?format=excel
+
+POST Requests:
+- Create Invoice: http://localhost:5000/invoices/
+- Bulk Import: http://localhost:5000/invoices/bulk-import
+
+PUT Requests:
+- Update Invoice: http://localhost:5000/invoices/{id}
+
+Invoice Export URLs:
+- Export all invoices: http://localhost:5000/invoices/export
+- Export as CSV: http://localhost:5000/invoices/export?format=csv
+- Export as Excel (3 sheets): http://localhost:5000/invoices/export?format=excel

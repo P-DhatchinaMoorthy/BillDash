@@ -1,0 +1,51 @@
+id,product_name,description,sku,category_id,subcategory_id,unit_of_measure,selling_price,purchase_price,quantity_in_stock,reorder_level,max_stock_level,supplier_id,batch_number,barcode
+7001,Automotive Car Accessories 1,Sample Automotive product in Car Accessories,AUTO-CAR-001,1007,2007,Piece,8781.48,62311.54,50,5,235,6005,BATCH-7001-2025,8.90167E+12
+7002,Furniture Chairs 2,Sample Furniture product in Chairs,FURN-CHA-002,1003,2003,Piece,42752.09,23401.12,168,5,369,6005,BATCH-7002-2025,8.90143E+12
+7003,Health & Beauty Skincare 3,Sample Health & Beauty product in Skincare,HEAL-SKI-003,1008,2008,Piece,77787.67,22395.12,69,17,495,6005,BATCH-7003-2025,8.90107E+12
+7004,Automotive Car Accessories 4,Sample Automotive product in Car Accessories,AUTO-CAR-004,1007,2007,Piece,53454.82,21819.72,20,25,423,6001,BATCH-7004-2025,8.90107E+12
+7005,Furniture Chairs 5,Sample Furniture product in Chairs,FURN-CHA-005,1003,2003,Piece,5606.67,48307.73,157,18,156,6001,BATCH-7005-2025,8.901E+12
+7006,Books Fiction 6,Sample Books product in Fiction,BOOK-FIC-006,1005,2005,Piece,44431.47,52723.43,112,18,247,6001,BATCH-7006-2025,8.90131E+12
+7007,Groceries Fruits & Vegetables 7,Sample Groceries product in Fruits & Vegetables,GROC-FRU-007,1004,2004,Piece,24174.62,25998.2,147,28,484,6003,BATCH-7007-2025,8.90126E+12
+7008,Clothing Men's Wear 8,Sample Clothing product in Men's Wear,CLOT-MEN-008,1002,2002,Piece,76633.9,56142.41,39,29,473,6003,BATCH-7008-2025,8.90122E+12
+7009,Toys Educational Toys 9,Sample Toys product in Educational Toys,TOYS-EDU-009,1009,2009,Piece,48239.91,54755.97,127,25,382,6003,BATCH-7009-2025,8.90154E+12
+7010,Automotive Car Accessories 10,Sample Automotive product in Car Accessories,AUTO-CAR-010,1007,2007,Piece,82733.05,34278.69,155,19,338,6001,BATCH-7010-2025,8.9017E+12
+7011,Sports Cricket 11,Sample Sports product in Cricket,SPOR-CRI-011,1006,2006,Piece,26583.11,6172.21,35,30,390,6002,BATCH-7011-2025,8.9012E+12
+7012,Toys Educational Toys 12,Sample Toys product in Educational Toys,TOYS-EDU-012,1009,2009,Piece,27492.06,46397.3,39,8,164,6001,BATCH-7012-2025,8.90189E+12
+7013,Appliances Microwave Ovens 13,Sample Appliances product in Microwave Ovens,APPL-MIC-013,1010,2010,Piece,36877.41,66391.31,144,9,421,6003,BATCH-7013-2025,8.90121E+12
+7014,Groceries Fruits & Vegetables 14,Sample Groceries product in Fruits & Vegetables,GROC-FRU-014,1004,2004,Piece,73208.71,3223.74,113,27,267,6005,BATCH-7014-2025,8.90128E+12
+7015,Health & Beauty Skincare 15,Sample Health & Beauty product in Skincare,HEAL-SKI-015,1008,2008,Piece,89105.86,24335.82,157,12,485,6005,BATCH-7015-2025,8.90148E+12
+7016,Furniture Chairs 16,Sample Furniture product in Chairs,FURN-CHA-016,1003,2003,Piece,18832.69,50980.91,61,18,453,6003,BATCH-7016-2025,8.9015E+12
+7017,Health & Beauty Skincare 17,Sample Health & Beauty product in Skincare,HEAL-SKI-017,1008,2008,Piece,17166.23,30681.08,110,19,386,6001,BATCH-7017-2025,8.90129E+12
+7018,Electronics Mobile Phones 18,Sample Electronics product in Mobile Phones,ELEC-MOB-018,1001,2001,Piece,87058.75,51929.93,169,6,210,6003,BATCH-7018-2025,8.9017E+12
+7019,Toys Educational Toys 19,Sample Toys product in Educational Toys,TOYS-EDU-019,1009,2009,Piece,24799.61,29488.49,81,9,343,6003,BATCH-7019-2025,8.90161E+12
+7020,Toys Educational Toys 20,Sample Toys product in Educational Toys,TOYS-EDU-020,1009,2009,Piece,70707.52,20014.66,137,30,173,6005,BATCH-7020-2025,8.90196E+12
+7021,Sports Cricket 21,Sample Sports product in Cricket,SPOR-CRI-021,1006,2006,Piece,2468.8,8118.78,153,14,311,6005,BATCH-7021-2025,8.90134E+12
+7022,Groceries Fruits & Vegetables 22,Sample Groceries product in Fruits & Vegetables,GROC-FRU-022,1004,2004,Piece,64511.55,36427.02,46,12,122,6004,BATCH-7022-2025,8.90174E+12
+7023,Health & Beauty Skincare 23,Sample Health & Beauty product in Skincare,HEAL-SKI-023,1008,2008,Piece,65567.45,60796.13,63,15,380,6004,BATCH-7023-2025,8.90162E+12
+7024,Clothing Men's Wear 24,Sample Clothing product in Men's Wear,CLOT-MEN-024,1002,2002,Piece,16652.04,43755.7,183,8,115,6001,BATCH-7024-2025,8.90164E+12
+7025,Toys Educational Toys 25,Sample Toys product in Educational Toys,TOYS-EDU-025,1009,2009,Piece,3160.57,13264.47,63,13,206,6002,BATCH-7025-2025,8.90108E+12
+7026,Appliances Microwave Ovens 26,Sample Appliances product in Microwave Ovens,APPL-MIC-026,1010,2010,Piece,60139.94,7813.77,84,27,403,6004,BATCH-7026-2025,8.90126E+12
+7027,Furniture Chairs 27,Sample Furniture product in Chairs,FURN-CHA-027,1003,2003,Piece,36375.62,43484.77,124,8,437,6003,BATCH-7027-2025,8.90107E+12
+7028,Electronics Mobile Phones 28,Sample Electronics product in Mobile Phones,ELEC-MOB-028,1001,2001,Piece,42620.89,57405.12,111,29,186,6005,BATCH-7028-2025,8.90198E+12
+7029,Toys Educational Toys 29,Sample Toys product in Educational Toys,TOYS-EDU-029,1009,2009,Piece,3428.03,66476.55,173,23,455,6005,BATCH-7029-2025,8.90198E+12
+7030,Automotive Car Accessories 30,Sample Automotive product in Car Accessories,AUTO-CAR-030,1007,2007,Piece,74944.83,57606.68,126,6,412,6004,BATCH-7030-2025,8.90111E+12
+7031,Furniture Chairs 31,Sample Furniture product in Chairs,FURN-CHA-031,1003,2003,Piece,15869.44,369.97,48,11,252,6004,BATCH-7031-2025,8.90133E+12
+7032,Appliances Microwave Ovens 32,Sample Appliances product in Microwave Ovens,APPL-MIC-032,1010,2010,Piece,15326.06,65789.81,53,18,392,6002,BATCH-7032-2025,8.90138E+12
+7033,Appliances Microwave Ovens 33,Sample Appliances product in Microwave Ovens,APPL-MIC-033,1010,2010,Piece,49195.44,66299.07,28,23,322,6002,BATCH-7033-2025,8.90147E+12
+7034,Electronics Mobile Phones 34,Sample Electronics product in Mobile Phones,ELEC-MOB-034,1001,2001,Piece,75936.62,24207.46,82,18,486,6001,BATCH-7034-2025,8.90109E+12
+7035,Electronics Mobile Phones 35,Sample Electronics product in Mobile Phones,ELEC-MOB-035,1001,2001,Piece,83953,16514.88,23,29,235,6005,BATCH-7035-2025,8.90124E+12
+7036,Automotive Car Accessories 36,Sample Automotive product in Car Accessories,AUTO-CAR-036,1007,2007,Piece,22832.76,1751.39,158,21,472,6005,BATCH-7036-2025,8.90102E+12
+7037,Toys Educational Toys 37,Sample Toys product in Educational Toys,TOYS-EDU-037,1009,2009,Piece,40979.64,23469.38,119,11,309,6005,BATCH-7037-2025,8.90142E+12
+7038,Clothing Men's Wear 38,Sample Clothing product in Men's Wear,CLOT-MEN-038,1002,2002,Piece,43719.69,445.68,142,21,432,6001,BATCH-7038-2025,8.90181E+12
+7039,Automotive Car Accessories 39,Sample Automotive product in Car Accessories,AUTO-CAR-039,1007,2007,Piece,50913.09,28046.76,73,5,357,6005,BATCH-7039-2025,8.90153E+12
+7040,Sports Cricket 40,Sample Sports product in Cricket,SPOR-CRI-040,1006,2006,Piece,28794.1,30596.45,90,8,445,6004,BATCH-7040-2025,8.90147E+12
+7041,Automotive Car Accessories 41,Sample Automotive product in Car Accessories,AUTO-CAR-041,1007,2007,Piece,1665.04,4067.2,85,6,241,6005,BATCH-7041-2025,8.9012E+12
+7042,Clothing Men's Wear 42,Sample Clothing product in Men's Wear,CLOT-MEN-042,1002,2002,Piece,75193.3,25267.42,6,12,287,6004,BATCH-7042-2025,8.90116E+12
+7043,Automotive Car Accessories 43,Sample Automotive product in Car Accessories,AUTO-CAR-043,1007,2007,Piece,89531.43,56660.47,93,16,227,6005,BATCH-7043-2025,8.90177E+12
+7044,Automotive Car Accessories 44,Sample Automotive product in Car Accessories,AUTO-CAR-044,1007,2007,Piece,8770.29,697.54,8,14,169,6005,BATCH-7044-2025,8.90188E+12
+7045,Groceries Fruits & Vegetables 45,Sample Groceries product in Fruits & Vegetables,GROC-FRU-045,1004,2004,Piece,67482.82,5646.03,2,14,219,6002,BATCH-7045-2025,8.90126E+12
+7046,Appliances Microwave Ovens 46,Sample Appliances product in Microwave Ovens,APPL-MIC-046,1010,2010,Piece,53741.68,7137.14,37,15,217,6002,BATCH-7046-2025,8.9016E+12
+7047,Groceries Fruits & Vegetables 47,Sample Groceries product in Fruits & Vegetables,GROC-FRU-047,1004,2004,Piece,60096.06,25141.66,92,5,466,6004,BATCH-7047-2025,8.90142E+12
+7048,Appliances Microwave Ovens 48,Sample Appliances product in Microwave Ovens,APPL-MIC-048,1010,2010,Piece,35437.5,40918.02,159,12,248,6003,BATCH-7048-2025,8.90132E+12
+7049,Automotive Car Accessories 49,Sample Automotive product in Car Accessories,AUTO-CAR-049,1007,2007,Piece,7230.81,64489.87,155,22,223,6005,BATCH-7049-2025,8.90162E+12
+7050,Clothing Men's Wear 50,Sample Clothing product in Men's Wear,CLOT-MEN-050,1002,2002,Piece,72060.37,56407.52,88,21,447,6001,BATCH-7050-2025,8.90119E+12

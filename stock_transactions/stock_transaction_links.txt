@@ -1,0 +1,37 @@
+Stock Transaction Module API Links
+===================================
+
+📦 PURCHASE TRANSACTIONS (/purchase-billing)
+├── Purchase List: http://localhost:5000/purchase-billing/
+├── Purchase Details: http://localhost:5000/purchase-billing/{purchase_id}
+├── Supplier Purchases: http://localhost:5000/purchase-billing/supplier/{supplier_id}
+└── Purchase Adjustments: http://localhost:5000/purchase-billing/adjustment
+
+GET Requests:
+- List all purchases: http://localhost:5000/purchase-billing/
+- Filter all by payment status: http://localhost:5000/purchase-billing/?payment_status=partially paid
+- Purchase details: http://localhost:5000/purchase-billing/{purchase_id}
+- Supplier purchases: http://localhost:5000/purchase-billing/supplier/{supplier_id}
+- Filter supplier by payment status: http://localhost:5000/purchase-billing/supplier/{supplier_id}?payment_status=paid
+- Purchase adjustments: http://localhost:5000/purchase-billing/adjustment
+- Adjustment details: http://localhost:5000/purchase-billing/adjustment/{adjustment_id}
+
+###################################################################################
+#- Purchase invoice: http://localhost:5000/purchase-billing/{purchase_id}/invoice #
+###################################################################################
+
+POST Requests:
+- Add Stock (Purchase): http://localhost:5000/purchases/add-stock
+- Pay Supplier: http://localhost:5000/purchase-billing/pay-supplier
+- Purchase Return: http://localhost:5000/purchase-billing/return
+- Purchase Adjustment: http://localhost:5000/purchase-billing/adjustment
+
+PUT Requests:
+- Update Purchase Payment: http://localhost:5000/purchases/update-payment/{purchase_id}
+- Update Payment Status: http://localhost:5000/purchase-billing/{bill_id}/status
+
+Stock Reports URLs:
+- Stock movement report: http://localhost:5000/reports/stock-movement
+- Filter by location: http://localhost:5000/reports/stock-movement?location=Branch1
+- Reorder report: http://localhost:5000/reports/reorder
+- Low stock alerts: http://localhost:5000/products/low-stock

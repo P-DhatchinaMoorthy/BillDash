@@ -1,0 +1,106 @@
+
+🛡️ PERMISSION-BASED ACCESS CONTROL (PBAC) SYSTEM
+
+📌 Overview
+A security system for the Bills Management Application with:
+- Granular permission control
+- Admin override
+- Comprehensive audit logging
+
+⚙️ Core Concepts
+- Default Deny All → all permissions = FALSE by default
+- Admin Override → admin bypasses all checks (still logged)
+- Explicit Grants Only → admin must assign permissions
+- Audit Trail → every user action is logged
+
+🗄️ Database Structure
+
+Existing Tables
+- users → user accounts with roles
+- permissions → list of modules/features
+- user_permissions → mapping of users to module access
+
+New Table: audit_log
+Tracks all user actions:
+
+CREATE TABLE audit_log (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    action VARCHAR(20) NOT NULL, -- CREATE, UPDATE, DELETE, READ
+    module_name VARCHAR(50) NOT NULL,
+    record_id INT,
+    old_data JSON,
+    new_data JSON,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+🔑 Permission System Logic
+
+Default Permissions
+- New users = NO permissions
+- Must be explicitly granted by admin
+- Principle of Least Privilege
+
+Admin Privileges
+- Bypasses all permission checks
+- Still logged in audit_log
+- Can grant/revoke permissions for any user
+- No entries needed in user_permissions table
+
+🌐 HTTP Method → Permission Mapping
+- GET → read
+- POST, PUT, PATCH → write
+- DELETE → delete
+
+🐍 Python Implementation
+(includes check_user_permission, require_permission decorator, audit logging, and method-action map)
+
+📂 API Endpoints
+Example: customers, invoices, payments, reports, suppliers, products, categories, purchases, stock_transactions
+
+⚡ Permission Management
+- Grant Permission (admin only)
+- View User Permissions
+
+🛡️ Security Benefits
+- Zero-Trust → default deny, explicit grants only
+- Granular Control → per-module, per-action
+- Admin Flexibility → full override + real-time updates
+- Audit Trail → user, IP, browser info
+- Scalable → easy to extend
+
+✅ Implementation Checklist
+- Create audit_log table
+- Add permission decorators
+- Apply to all endpoints
+- Test admin bypass
+- Test restricted access
+- Verify audit logging
+- Build admin permission management UI
+- Test with multiple roles
+- Document role matrix
+- Monitor failed attempts
+
+📊 Example Permission Matrix
+
+Legend: R=Read, W=Write, D=Delete, ❌=No Access
+
+| Module / Feature          | Admin | Manager | Accountant | Stock Manager | Sales |
+|----------------------------|-------|---------|------------|---------------|-------|
+| Users & Roles (/users)     | Full CRUD + Roles | Add/Edit (no roles) | View Only | ❌ | ❌ |
+| Audit Logs (/audit)        | Full | View Only | View Only | ❌ | ❌ |
+| Settings (/settings)       | Full | Company/Notifications | Tax/Currency | ❌ | ❌ |
+| Auth & Security (/auth)    | Full | Reset Passwords | View Own | View Own | View Own |
+| Dashboard (/)              | Full | Full | Financial Widgets | Stock Widgets | Sales Widgets |
+| Reports (/reports)         | Full | Sales + Inventory | Financial | Inventory | Sales |
+| Customers (/customers)     | Full | Full | View + Edit | ❌ | View Only |
+| Inventory (/inventory)     | Full | Full | View Only | Full | View Only |
+| Invoices (/invoices)       | Full | Create + Approve | Edit + Payments | POs + Payments | ❌ |
+| Suppliers (/suppliers)     | Full | Full | Payment Terms | View + Link Products | ❌ |
+| Stock Transactions (/stock-transactions) | Full | Approve | View Only | Full | Returns/Damage |
+| Payments (/payments)       | Full | View + Approve | Full | ❌ | Create/Edit |
+
+⚡ Enterprise-ready PBAC: granular permissions, admin override, real-time management, compliance audit trails.

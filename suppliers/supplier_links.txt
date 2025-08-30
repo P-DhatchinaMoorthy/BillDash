@@ -1,0 +1,37 @@
+Supplier Module API Links
+==========================
+
+🏭 SUPPLIERS (/suppliers)
+├── Supplier List: http://localhost:5000/suppliers/
+├── Supplier Details: http://localhost:5000/suppliers/{id}
+├── Purchase History: http://localhost:5000/suppliers/{id}/purchase-history
+├── Payment History: http://localhost:5000/suppliers/{id}/payment-history
+├── All Purchase History: http://localhost:5000/suppliers/purchase-history
+└── All Payment History: http://localhost:5000/suppliers/payment-history
+
+GET Requests:
+- List all suppliers: http://localhost:5000/suppliers/
+- Search suppliers: http://localhost:5000/suppliers/?search=searchterm
+- Filter by name: http://localhost:5000/suppliers/?search=ABC
+- Filter by phone: http://localhost:5000/suppliers/?search=9876543210
+- Filter by contact person: http://localhost:5000/suppliers/?search=John
+- Get supplier details: http://localhost:5000/suppliers/{id}
+- Get purchase history: http://localhost:5000/suppliers/{id}/purchase-history
+- Filter purchase by date: http://localhost:5000/suppliers/{id}/purchase-history?date_from=2025-01-01&date_to=2025-01-31
+- Filter purchase by payment status: http://localhost:5000/suppliers/{id}/purchase-history?payment_status=paid
+- Get payment history: http://localhost:5000/suppliers/{id}/payment-history
+- Filter payment by date: http://localhost:5000/suppliers/{id}/payment-history?date_from=2025-01-01&date_to=2025-01-31
+- Filter payment by status: http://localhost:5000/suppliers/{id}/payment-history?payment_status=pending
+- Get all purchase history: http://localhost:5000/suppliers/purchase-history
+- Filter all purchases by date: http://localhost:5000/suppliers/purchase-history?date_from=2025-01-01&date_to=2025-01-31
+- Filter all purchases by status: http://localhost:5000/suppliers/purchase-history?payment_status=paid
+- Get all payment history: http://localhost:5000/suppliers/payment-history
+- Filter all payments by date: http://localhost:5000/suppliers/payment-history?date_from=2025-01-01&date_to=2025-01-31
+- Filter all payments by status: http://localhost:5000/suppliers/payment-history?payment_status=pending
+
+POST Requests:
+- Create Supplier: http://localhost:5000/suppliers/
+- Bulk Import: http://localhost:5000/suppliers/bulk
+
+PUT Requests:
+- Update Supplier: http://localhost:5000/suppliers/{id}

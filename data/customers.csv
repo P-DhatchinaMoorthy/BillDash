@@ -1,0 +1,21 @@
+alternate_phone,billing_address,business_name,contact_person,created_at,email,gst_number,notes,opening_balance,pan_number,payment_terms,phone,shipping_address,branch
+938460001,"1001 Street, City 1",Business_1,Person_1,2025-08-20T11:57:21,business1@example.com,GST0001,Note for customer 1,19778.00,PAN0001,Immediate,880760001,"2001 Avenue, City 1",Bangalore
+938460002,"1002 Street, City 2",Business_2,Person_2,2025-08-20T11:58:21,business2@example.com,GST0002,Note for customer 2,16775.00,PAN0002,Net 30,880760002,"2002 Avenue, City 2",Hyderabad
+938460003,"1003 Street, City 3",Business_3,Person_3,2025-08-20T11:59:21,business3@example.com,GST0003,Note for customer 3,20506.00,PAN0003,Net 30,880760003,"2003 Avenue, City 3",Delhi
+938460004,"1004 Street, City 4",Business_4,Person_4,2025-08-20T12:00:21,business4@example.com,GST0004,Note for customer 4,33879.00,PAN0004,Net 45,880760004,"2004 Avenue, City 4",Mumbai
+938460005,"1005 Street, City 5",Business_5,Person_5,2025-08-20T12:01:21,business5@example.com,GST0005,Note for customer 5,18113.00,PAN0005,Net 30,880760005,"2005 Avenue, City 5",Chennai
+938460006,"1006 Street, City 6",Business_6,Person_6,2025-08-20T12:02:21,business6@example.com,GST0006,Note for customer 6,19559.00,PAN0006,Net 15,880760006,"2006 Avenue, City 6",Bangalore
+938460007,"1007 Street, City 7",Business_7,Person_7,2025-08-20T12:03:21,business7@example.com,GST0007,Note for customer 7,14314.00,PAN0007,Net 30,880760007,"2007 Avenue, City 7",Hyderabad
+938460008,"1008 Street, City 8",Business_8,Person_8,2025-08-20T12:04:21,business8@example.com,GST0008,Note for customer 8,17957.00,PAN0008,Net 15,880760008,"2008 Avenue, City 8",Delhi
+938460009,"1009 Street, City 9",Business_9,Person_9,2025-08-20T12:05:21,business9@example.com,GST0009,Note for customer 9,16461.00,PAN0009,Immediate,880760009,"2009 Avenue, City 9",Mumbai
+938460010,"1010 Street, City 10",Business_10,Person_10,2025-08-20T12:06:21,business10@example.com,GST0010,Note for customer 10,4106.00,PAN0010,Net 15,880760010,"2010 Avenue, City 10",Chennai
+938460011,"1011 Street, City 11",Business_11,Person_11,2025-08-20T12:07:21,business11@example.com,GST0011,Note for customer 11,24824.00,PAN0011,Net 45,880760011,"2011 Avenue, City 11",Bangalore
+938460012,"1012 Street, City 12",Business_12,Person_12,2025-08-20T12:08:21,business12@example.com,GST0012,Note for customer 12,15708.00,PAN0012,Net 30,880760012,"2012 Avenue, City 12",Hyderabad
+938460013,"1013 Street, City 13",Business_13,Person_13,2025-08-20T12:09:21,business13@example.com,GST0013,Note for customer 13,16356.00,PAN0013,Net 15,880760013,"2013 Avenue, City 13",Delhi
+938460014,"1014 Street, City 14",Business_14,Person_14,2025-08-20T12:10:21,business14@example.com,GST0014,Note for customer 14,26413.00,PAN0014,Immediate,880760014,"2014 Avenue, City 14",Mumbai
+938460015,"1015 Street, City 15",Business_15,Person_15,2025-08-20T12:11:21,business15@example.com,GST0015,Note for customer 15,45246.00,PAN0015,Net 30,880760015,"2015 Avenue, City 15",Chennai
+938460016,"1016 Street, City 16",Business_16,Person_16,2025-08-20T12:12:21,business16@example.com,GST0016,Note for customer 16,10372.00,PAN0016,Net 30,880760016,"2016 Avenue, City 16",Bangalore
+938460017,"1017 Street, City 17",Business_17,Person_17,2025-08-20T12:13:21,business17@example.com,GST0017,Note for customer 17,12520.00,PAN0017,Net 15,880760017,"2017 Avenue, City 17",Hyderabad
+938460018,"1018 Street, City 18",Business_18,Person_18,2025-08-20T12:14:21,business18@example.com,GST0018,Note for customer 18,37597.00,PAN0018,Immediate,880760018,"2018 Avenue, City 18",Delhi
+938460019,"1019 Street, City 19",Business_19,Person_19,2025-08-20T12:15:21,business19@example.com,GST0019,Note for customer 19,12058.00,PAN0019,Immediate,880760019,"2019 Avenue, City 19",Mumbai
+938460020,"1020 Street, City 20",Business_20,Person_20,2025-08-20T12:16:21,business20@example.com,GST0020,Note for customer 20,8046.00,PAN0020,Immediate,880760020,"2020 Avenue, City 20",Chennai

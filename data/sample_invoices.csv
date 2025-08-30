@@ -1,0 +1,11 @@
+customer_id,product_id,quantity,tax_rate_per_item,discount_per_item,discount_type,due_date,payment_terms,currency,shipping_charges,other_charges,additional_discount,additional_discount_type,notes
+8004,7026,1,18.0,6.55,percentage,2025-09-15,Net 30,INR,98.78,28.4,6.29,percentage,"Invoice with per-item discounts (amount = whole item, percentage = per item)"
+8008,7048,5,18.0,295.92,amount,2025-09-15,Net 30,INR,95.24,70.38,5.13,amount,"Invoice with per-item discounts (amount = whole item, percentage = per item)"
+8009,7032,3,18.0,127.58,amount,2025-09-15,Net 30,INR,98.36,24.12,8.98,percentage,"Invoice with per-item discounts (amount = whole item, percentage = per item)"
+8014,7045,5,18.0,430.49,amount,2025-09-15,Net 30,INR,173.54,62.49,6.43,percentage,"Invoice with per-item discounts (amount = whole item, percentage = per item)"
+8020,7001,3,18.0,8.06,percentage,2025-09-15,Net 30,INR,50.25,65.68,0.93,percentage,"Invoice with per-item discounts (amount = whole item, percentage = per item)"
+8002,7043,5,18.0,105.75,amount,2025-09-15,Net 30,INR,190.64,99.17,8.16,percentage,"Invoice with per-item discounts (amount = whole item, percentage = per item)"
+8009,7024,3,18.0,6.16,percentage,2025-09-15,Net 30,INR,119.87,98.77,7.05,amount,"Invoice with per-item discounts (amount = whole item, percentage = per item)"
+8004,7042,5,18.0,13.32,percentage,2025-09-15,Net 30,INR,169.5,98.16,2.66,amount,"Invoice with per-item discounts (amount = whole item, percentage = per item)"
+8016,7034,2,18.0,7.37,percentage,2025-09-15,Net 30,INR,165.88,46.03,1.32,amount,"Invoice with per-item discounts (amount = whole item, percentage = per item)"
+8003,7001,2,18.0,268.28,amount,2025-09-15,Net 30,INR,59.44,92.48,9.1,amount,"Invoice with per-item discounts (amount = whole item, percentage = per item)"

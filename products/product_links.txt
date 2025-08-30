@@ -1,0 +1,24 @@
+POST /products/
+- Create single product
+- Create multiple products (bulk)
+- Required fields: id, product_name, sku, purchase_price
+
+GET /products/
+- List all products
+- Optional filters: category_id, subcategory_id
+- Examples:
+  GET /products/
+  GET /products/?category_id=1
+  GET /products/?subcategory_id=2
+  GET /products/?category_id=1&subcategory_id=2
+
+GET /products/<int:product_id>
+- Get single product by ID
+- Example: GET /products/1010
+
+PUT /products/<int:product_id>
+- Update product by ID
+
+POST /products/bulk
+- Bulk upload via CSV or XLSX files
+- Supports batch product creation

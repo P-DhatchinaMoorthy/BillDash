@@ -1,0 +1,28 @@
+Customer Module API Links
+=========================
+
+👥 CUSTOMERS (/customers)
+├── Customer List: http://localhost:5000/customers/
+├── Customer Details: http://localhost:5000/customers/{id}
+├── Customer Invoices: http://localhost:5000/customers/{id}/invoices
+└── Export Customers: http://localhost:5000/customers/export
+
+GET Requests:
+- List with pagination: http://localhost:5000/customers/?page=1
+- Filter by ID range: http://localhost:5000/customers/?id_from=8001&id_to=8100
+- Filter by date: http://localhost:5000/customers/?date_from=2025-08-01&date_to=2025-08-31
+- Search by phone: http://localhost:5000/customers/?phone=9876543210
+- Export as CSV: http://localhost:5000/customers/export?format=csv
+- Export as Excel: http://localhost:5000/customers/export?format=excel
+
+POST Requests:
+- Add Customer: http://localhost:5000/customers/
+- Bulk Import: http://localhost:5000/customers/bulk-import
+
+PUT Requests:
+- Edit Customer: http://localhost:5000/customers/{id}
+
+Customer Invoice URLs:
+- Get invoices: http://localhost:5000/customers/{id}/invoices
+- Filter by status: http://localhost:5000/customers/{id}/invoices?payment_status=paid
+- Paginated invoices: http://localhost:5000/customers/{id}/invoices?page=1

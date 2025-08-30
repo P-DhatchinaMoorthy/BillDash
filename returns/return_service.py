@@ -1,0 +1,208 @@
+# services/return_service.py
+from datetime import datetime
+from extensions import db
+from returns.product_return import ProductReturn, DamagedProduct
+from products.product import Product
+from stock_transactions.stock_transaction import StockTransaction
+from sqlalchemy.exc import SQLAlchemyError
+
+class ReturnService:
+    
+    @staticmethod
+    def validate_payment_status(invoice):
+        """Validate if returns are allowed based on payment status"""
+        restricted_statuses = ['Pending', 'Partially Paid']
+        if invoice.status in restricted_statuses:
+            return False, f"Returns, exchanges, and replacements are not allowed when payment status is '{invoice.status}'. Please complete payment first."
+        return True, None
+    
+    @staticmethod
+    def process_return(return_data):
+        """Process a product return and update stock accordingly"""
+        try:
+            # Create return record
+            product_return = ProductReturn(**return_data)
+            db.session.add(product_return)
+            db.session.flush()  # Get the ID
+            
+            # Process based on return type
+            if product_return.return_type == 'return':
+                ReturnService._process_refund_return(product_return)
+            elif product_return.return_type == 'exchange':
+                ReturnService._process_exchange(product_return)
+            elif product_return.return_type == 'damage':
+                ReturnService._process_damage_return(product_return)
+            
+            # Update return status
+            product_return.status = 'Processed'
+            product_return.processed_date = datetime.utcnow()
+            
+            db.session.commit()
+            return {"success": True, "return_id": product_return.id, "return_number": product_return.return_number}
+            
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _process_refund_return(product_return):
+        """Handle return with refund - add product back to stock"""
+        # Add product back to stock
+        product = Product.query.get(product_return.product_id)
+        product.quantity_in_stock += product_return.quantity_returned
+        
+        # Create stock transaction
+        stock_transaction = StockTransaction(
+            product_id=product_return.product_id,
+            transaction_type="Return",
+            quantity=product_return.quantity_returned,
+            reference_number=product_return.return_number,
+            notes=f"Product return - Refund: {product_return.refund_amount}"
+        )
+        db.session.add(stock_transaction)
+    
+    @staticmethod
+    def _process_exchange(product_return):
+        """Handle product exchange - remove old, add new product"""
+        # Remove returned product from stock (if resaleable)
+        if product_return.is_resaleable:
+            returned_product = Product.query.get(product_return.product_id)
+            returned_product.quantity_in_stock += product_return.quantity_returned
+            
+            # Create return stock transaction
+            return_transaction = StockTransaction(
+                product_id=product_return.product_id,
+                transaction_type="Return",
+                quantity=product_return.quantity_returned,
+                reference_number=product_return.return_number,
+                notes="Product exchange - returned item"
+            )
+            db.session.add(return_transaction)
+        
+        # Remove new product from stock for exchange
+        if product_return.exchange_product_id:
+            exchange_product = Product.query.get(product_return.exchange_product_id)
+            exchange_product.quantity_in_stock -= product_return.exchange_quantity
+            
+            # Create exchange stock transaction
+            exchange_transaction = StockTransaction(
+                product_id=product_return.exchange_product_id,
+                transaction_type="Sale",
+                sale_type="Exchange",
+                quantity=-product_return.exchange_quantity,
+                reference_number=product_return.return_number,
+                notes="Product exchange - new item sent"
+            )
+            db.session.add(exchange_transaction)
+    
+    @staticmethod
+    def _process_damage_return(product_return):
+        """Handle damaged product return - store separately"""
+        # Create damaged product record
+        damaged_product = DamagedProduct(
+            product_id=product_return.product_id,
+            return_id=product_return.id,
+            quantity=product_return.quantity_returned,
+            damage_reason=product_return.reason,
+            damage_level=product_return.damage_level,
+            storage_location="DAMAGE_WAREHOUSE"
+        )
+        db.session.add(damaged_product)
+        
+        # Create stock transaction for damaged goods
+        stock_transaction = StockTransaction(
+            product_id=product_return.product_id,
+            transaction_type="Damage",
+            quantity=product_return.quantity_returned,
+            reference_number=product_return.return_number,
+            notes=f"Damaged product return - Level: {product_return.damage_level}"
+        )
+        db.session.add(stock_transaction)
+        
+        # Send replacement if specified
+        if product_return.exchange_product_id:
+            replacement_product = Product.query.get(product_return.exchange_product_id)
+            replacement_product.quantity_in_stock -= product_return.exchange_quantity
+            
+            replacement_transaction = StockTransaction(
+                product_id=product_return.exchange_product_id,
+                transaction_type="Sale",
+                sale_type="Replacement",
+                quantity=-product_return.exchange_quantity,
+                reference_number=product_return.return_number,
+                notes="Replacement for damaged product"
+            )
+            db.session.add(replacement_transaction)
+    
+    @staticmethod
+    def get_return_summary():
+        """Get detailed summary of all returns with customer and invoice details"""
+        returns = db.session.query(ProductReturn).all()
+        
+        detailed_returns = []
+        for return_item in returns:
+            return_detail = {
+                "return_id": return_item.id,
+                "return_number": return_item.return_number,
+                "return_type": return_item.return_type,
+                "quantity_returned": return_item.quantity_returned,
+                "refund_amount": float(return_item.refund_amount) if return_item.refund_amount else 0,
+                "status": return_item.status,
+                "return_date": return_item.return_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "reason": return_item.reason,
+                "customer_details": {
+                    "id": return_item.customer_id,
+                    "name": return_item.customer.contact_person if return_item.customer else "Unknown",
+                    "phone": return_item.customer.phone if return_item.customer else None,
+                    "email": return_item.customer.email if return_item.customer else None
+                },
+                "invoice_details": {
+                    "id": return_item.original_invoice_id,
+                    "invoice_number": return_item.original_invoice.invoice_number if return_item.original_invoice else None,
+                    "invoice_date": return_item.original_invoice.invoice_date.strftime("%Y-%m-%d") if return_item.original_invoice else None,
+                    "grand_total": float(return_item.original_invoice.grand_total) if return_item.original_invoice else 0
+                },
+                "product_details": {
+                    "id": return_item.product_id,
+                    "name": return_item.product.product_name if return_item.product else "Unknown",
+                    "sku": return_item.product.sku if return_item.product else None,
+                    "original_price": float(return_item.original_price)
+                }
+            }
+            detailed_returns.append(return_detail)
+        
+        summary = {
+            "summary_statistics": {
+                "total_returns": len(returns),
+                "by_type": {
+                    "return": len([r for r in returns if r.return_type == 'return']),
+                    "exchange": len([r for r in returns if r.return_type == 'exchange']),
+                    "damage": len([r for r in returns if r.return_type == 'damage'])
+                },
+                "total_refund_amount": float(sum([r.refund_amount for r in returns if r.refund_amount])),
+                "pending_returns": len([r for r in returns if r.status == 'Pending'])
+            },
+            "detailed_returns": detailed_returns
+        }
+        
+        return summary
+    
+    @staticmethod
+    def get_damaged_products_inventory():
+        """Get inventory of damaged products"""
+        damaged_products = db.session.query(DamagedProduct).filter(
+            DamagedProduct.status == 'Stored'
+        ).all()
+        
+        inventory = []
+        for item in damaged_products:
+            inventory.append({
+                "id": item.id,
+                "product_name": item.product.product_name,
+                "quantity": item.quantity,
+                "damage_level": item.damage_level,
+                "damage_date": item.damage_date.strftime("%Y-%m-%d"),
+                "storage_location": item.storage_location
+            })
+        
+        return inventory

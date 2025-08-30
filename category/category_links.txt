@@ -1,0 +1,7 @@
+Category API Endpoints:
+
+POST   /categories/           - Create single category
+GET    /categories/           - List all categories  
+GET    /categories/{id}       - Get specific category
+PUT    /categories/{id}       - Update category
+POST   /categories/bulk       - Bulk upload via CSV/Excel

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Purchase Invoice</title>
+    <style>
+        @page { size: A4; margin: 0.5in; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .invoice-box { max-width: 800px; margin: 0 auto; background: white; border: none; box-shadow: 0 0 10px rgba(0,0,0,0.1); padding: 30px; }
+        .invoice-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4472C4; padding-bottom: 20px; }
+        .invoice-title { font-size: 28px; font-weight: bold; color: #4472C4; margin-bottom: 5px; }
+        .company-details { display: flex; justify-content: space-between; margin-bottom: 30px; }
+        .company-info, .supplier-info { width: 45%; }
+        .section-title { font-size: 16px; font-weight: bold; color: #4472C4; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+        .info-text { font-size: 12px; line-height: 1.4; margin: 2px 0; }
+        .purchase-info { display: flex; justify-content: space-between; margin: 20px 0; padding: 15px; background: #f8f9fa; border-left: 4px solid #4472C4; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th { background: #4472C4; color: white; padding: 12px 8px; font-size: 12px; font-weight: bold; text-align: center; }
+        td { padding: 10px 8px; font-size: 11px; border-bottom: 1px solid #ddd; text-align: center; }
+        .product-info { text-align: left; vertical-align: middle; padding-left: 20px; }
+        .totals-table { width: 40%; margin-left: auto; margin-top: 20px; }
+        .totals-table td { border: 1px solid #ddd; padding: 8px; font-weight: bold; }
+        .totals-table td:first-child { text-align: left; }
+        .totals-table td:last-child { text-align: right; }
+        .totals-table .amount { display: flex; justify-content: space-between; }
+        .grand-total { background: #4472C4; color: white; }
+        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 11px; color: #666; }
+        .download-btn { position: fixed; top: 20px; right: 20px; background: #4472C4; color: white; padding: 12px 20px; border: none; border-radius: 5px; text-decoration: none; font-weight: bold; }
+        @media print { .download-btn { display: none; } body { background: white; padding: 0; } .invoice-box { box-shadow: none; } }
+    </style>
+</head>
+<body>
+    <button onclick="downloadPDF()" class="download-btn">Download PDF</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        function downloadPDF() {
+            const element = document.querySelector('.invoice-box');
+            html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true
+            }).then(canvas => {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = 210;
+                const pageHeight = 295;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+                
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                
+                pdf.save(`purchase_invoice_{{ purchase_id }}.pdf`);
+            });
+        }
+    </script>
+    <div class="invoice-box">
+        <div class="invoice-header">
+            <div class="invoice-title">PURCHASE INVOICE</div>
+            <div class="info-text">Invoice #{{ purchase_id }}</div>
+        </div>
+        
+        <div class="company-details">
+            <div class="supplier-info">
+                <div class="section-title">Supplier Details</div>
+                <div class="info-text"><strong>{{ data.supplier_details.name }}</strong></div>
+                <div class="info-text">{{ data.supplier_details.address }}</div>
+                <div class="info-text">Contact: {{ data.supplier_details.contact_person }}</div>
+                <div class="info-text">Phone: {{ data.supplier_details.phone }}</div>
+                <div class="info-text">Email: {{ data.supplier_details.email }}</div>
+                <div class="info-text">GST: {{ data.supplier_details.gst_number }}</div>
+            </div>
+            <div class="company-info">
+                <div class="section-title">{{ our_company.name }}</div>
+                <div class="info-text">{{ our_company.address }}</div>
+                <div class="info-text">Phone: {{ our_company.phone }}</div>
+                <div class="info-text">Email: {{ our_company.email }}</div>
+                <div class="info-text">GST: {{ our_company.gst }}</div>
+            </div>
+        </div>
+
+        <div class="purchase-info">
+            <div><strong>Purchase Reference:</strong> {{ data.purchase_details.reference_number }}</div>
+            <div><strong>Date:</strong> {{ data.purchase_details.purchase_date }}</div>
+        </div>
+
+        <table>
+            <tr>
+                <th style="text-align: center;">Sl No</th>
+                <th style="text-align: center;">Description</th>
+                <th style="text-align: center;">Product Info</th>
+                <th style="text-align: center;">SKU</th>
+                <th style="text-align: center;">Batch</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: center;">Unit</th>
+                <th style="text-align: center;">Price</th>
+                <th style="text-align: center;">Total</th>
+            </tr>
+            {% if data.products %}
+                {% for product in data.products %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ product.product_details.name }}</td>
+                    <td class="product-info" style="font-size: 10px;">
+                        ID: {{ product.product_details.product_id }}<br>
+                        Sup: {{ data.supplier_details.supplier_id }}<br>
+                        Cat: {{ product.product_details.category_id }}<br>
+                        Sub: {{ product.product_details.subcategory_id }}
+                    </td>
+                    <td style="text-align: center;">{{ product.product_details.sku }}</td>
+                    <td>{{ product.product_details.batch_number }}</td>
+                    <td>{{ product.purchase_details.quantity_purchased }}</td>
+                    <td>{{ product.product_details.unit_of_measure }}</td>
+                    <td>{{ product.product_details.purchase_price }}</td>
+                    <td>Rs. {{ "%.2f"|format(product.purchase_details.quantity_purchased * (product.product_details.purchase_price | float)) }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td>1</td>
+                    <td>{{ data.product_details.name }}</td>
+                    <td class="product-info" style="font-size: 10px;">
+                        ID: {{ data.product_details.product_id }}<br>
+                        Sup: {{ data.supplier_details.supplier_id }}<br>
+                        Cat: {{ data.product_details.category_id }}<br>
+                        Sub: {{ data.product_details.subcategory_id }}
+                    </td>
+                    <td style="text-align: center;">{{ data.product_details.sku }}</td>
+                    <td>{{ data.product_details.batch_number }}</td>
+                    <td>{{ data.purchase_details.quantity_purchased }}</td>
+                    <td>{{ data.product_details.unit_of_measure }}</td>
+                    <td>{{ data.product_details.purchase_price }}</td>
+                    <td>Rs. {{ "%.2f"|format(data.purchase_details.quantity_purchased * (data.product_details.purchase_price | float)) }}</td>
+                </tr>
+            {% endif %}
+        </table>
+
+        <table class="totals-table">
+            <tr>
+                <td>Subtotal:</td>
+                <td><span class="amount"><span>Rs.</span><span>{{ data.payment_details.grand_total }}</span></span></td>
+            </tr>
+            <tr>
+                <td>Grand Total:</td>
+                <td><span class="amount"><span>Rs.</span><span>{{ data.payment_details.grand_total }}</span></span></td>
+            </tr>
+            <tr>
+                <td>Amount Paid:</td>
+                <td style="background: #d4edda; color: #155724;"><span class="amount"><span>Rs.</span><span>{{ "%.2f"|format(data.payment_details.payment_amount|float) }}</span></span></td>
+            </tr>
+            {% if data.payment_details.balance_amount|float > 0 %}
+            <tr>
+                <td>Balance Due:</td>
+                <td style="color: #dc3545; background: #f8d7da;"><span class="amount"><span>Rs.</span><span>{{ data.payment_details.balance_amount }}</span></span></td>
+            </tr>
+            {% elif data.payment_details.balance_amount|float < 0 %}
+            <tr>
+                <td>Excess Paid:</td>
+                <td style="color: #28a745; background: #d1ecf1;"><span class="amount"><span>Rs.</span><span>{{ "%.2f"|format((data.payment_details.balance_amount|float) * -1) }}</span></span></td>
+            </tr>
+            <tr>
+                <td><strong>Amount to Return by Supplier:</strong></td>
+                <td style="color: #fd7e14; background: #fff3cd; font-weight: bold;"><span class="amount"><span>Rs.</span><span>{{ "%.2f"|format((data.payment_details.balance_amount|float) * -1) }}</span></span></td>
+            </tr>
+            {% else %}
+            <tr>
+                <td>Balance Due:</td>
+                <td style="color: #28a745; background: #d4edda;"><span class="amount"><span>Rs.</span><span>0.00 (Fully Paid)</span></span></td>
+            </tr>
+            {% endif %}
+            <tr class="grand-total">
+                <td>Payment Status:</td>
+                <td>{{ data.payment_details.payment_status }}</td>
+            </tr>
+        </table>
+
+        <div class="footer">
+            <div><strong>Notes:</strong> {{ data.stock_transaction.notes }}</div>
+            <div style="text-align: center; margin-top: 20px; font-style: italic;">
+                Certified that the particulars given above are true and correct.
+            </div>
+            <div style="text-align: center; margin-top: 10px; color: #999;">
+                Thank you for your business!
+            </div>
+        </div>
+    </div>
+</body>
+</html>
