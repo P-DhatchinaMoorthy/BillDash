@@ -1,6 +1,6 @@
 # models/stock_transaction.py
 from datetime import datetime
-from extensions import db
+from src.extensions import db
 import uuid
 
 class StockTransaction(db.Model):

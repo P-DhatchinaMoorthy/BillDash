@@ -1,10 +1,12 @@
 # routes/sales_routes.py
 from flask import Blueprint, request, jsonify
 from sales.sales_service import SalesService
+from user.auth_bypass import require_permission
 
 bp = Blueprint("sales", __name__)
 
 @bp.route("/create-with-payment", methods=["POST"])
+@require_permission('sales', 'write')
 def create_sale_with_payment():
     payload = request.get_json() or {}
     customer_id = payload.get("customer_id")

@@ -201,6 +201,13 @@ class PaymentService:
         customer = Customer.query.get(invoice.customer_id)
         payments = Payment.query.filter_by(invoice_id=invoice_id).all()
         
+        # Get company settings
+        try:
+            from settings.company_settings import Settings
+            company_settings = Settings.query.first()
+        except:
+            company_settings = None
+        
         # Calculate totals
         total_paid = sum([Decimal(p.amount_paid) for p in payments])
         total_discount = sum([Decimal(p.discount_amount) for p in payments])
@@ -210,7 +217,7 @@ class PaymentService:
         return {
             "invoice": {
                 "id": invoice.id,
-                "invoice_number": f"INV-{invoice.id}",
+                "invoice_number": invoice.invoice_number,
                 "invoice_date": invoice.invoice_date.isoformat(),
                 "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
                 "payment_terms": invoice.payment_terms,
@@ -250,9 +257,7 @@ class PaymentService:
                 "product_name": item.product.product_name,
                 "sku": item.product.sku,
                 "description": item.product.description,
-                "category": item.product.category.name if item.product.category else None,
                 "category_id": item.product.category_id,
-                "subcategory": item.product.category.subcategory_name if item.product.category else None,
                 "subcategory_id": item.product.subcategory_id,
                 "unit_of_measure": item.product.unit_of_measure,
                 "barcode": item.product.barcode,
@@ -263,6 +268,7 @@ class PaymentService:
                 "discount_per_item": str(item.discount_per_item),
                 "tax_rate_per_item": str(item.tax_rate_per_item),
                 "total_price": str(item.total_price),
+                "hsn_code": PaymentService._get_hsn_code(item.product),
                 "supplier_info": {
                     "supplier_name": item.product.supplier_ref.name if item.product.supplier_ref else None,
                     "supplier_phone": item.product.supplier_ref.phone if item.product.supplier_ref else None
@@ -306,8 +312,93 @@ class PaymentService:
                 "net_amount_received": f"{(total_paid - total_excess):.2f}",
                 "excess_to_return": f"{total_excess:.2f}",
                 "outstanding_balance": f"{max(Decimal('0'), balance_due):.2f}"
+            },
+            "amount_in_words": PaymentService._number_to_words(invoice.grand_total),
+            "company_settings": {
+                "company_name": company_settings.business_name if company_settings else None,
+                "company_gstin": company_settings.gst_number if company_settings else None,
+                "company_address": company_settings.registered_address if company_settings else None,
+                "company_city": company_settings.city if company_settings else None,
+                "company_state": company_settings.state if company_settings else None,
+                "company_pincode": company_settings.postal_code if company_settings else None,
+                "company_phone": company_settings.primary_phone if company_settings else None,
+                "company_email": company_settings.primary_email if company_settings else None,
+                "company_pan": company_settings.pan_number if company_settings else None,
+                "company_website": company_settings.website if company_settings else None
             }
         }
+    
+    @staticmethod
+    def _get_hsn_code(product):
+        """Get HSN code from product's category"""
+        try:
+            from category.category import Category
+            if product.category_id:
+                category = Category.query.get(product.category_id)
+                return category.hsn_code if category else None
+            return None
+        except:
+            return None
+    
+    @staticmethod
+    def _number_to_words(amount):
+        """Convert number to words for Indian currency"""
+        try:
+            amount = float(amount)
+            if amount == 0:
+                return "Zero Rupees Only"
+            
+            # Simple implementation for common amounts
+            ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
+            teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
+            tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+            
+            def convert_hundreds(n):
+                result = ''
+                if n >= 100:
+                    result += ones[n // 100] + ' Hundred '
+                    n %= 100
+                if n >= 20:
+                    result += tens[n // 10] + ' '
+                    n %= 10
+                elif n >= 10:
+                    result += teens[n - 10] + ' '
+                    n = 0
+                if n > 0:
+                    result += ones[n] + ' '
+                return result.strip()
+            
+            rupees = int(amount)
+            paise = int((amount - rupees) * 100)
+            
+            result = ''
+            if rupees >= 10000000:  # Crores
+                crores = rupees // 10000000
+                result += convert_hundreds(crores) + ' Crore '
+                rupees %= 10000000
+            
+            if rupees >= 100000:  # Lakhs
+                lakhs = rupees // 100000
+                result += convert_hundreds(lakhs) + ' Lakh '
+                rupees %= 100000
+            
+            if rupees >= 1000:  # Thousands
+                thousands = rupees // 1000
+                result += convert_hundreds(thousands) + ' Thousand '
+                rupees %= 1000
+            
+            if rupees > 0:
+                result += convert_hundreds(rupees) + ' '
+            
+            result += 'Rupees'
+            
+            if paise > 0:
+                result += ' And ' + convert_hundreds(paise) + ' Paise'
+            
+            result += ' Only'
+            return result.strip()
+        except:
+            return f"Rupees {amount} Only"
     
     @staticmethod
     def get_outstanding_summary():

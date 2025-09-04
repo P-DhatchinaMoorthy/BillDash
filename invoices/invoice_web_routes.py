@@ -1,10 +1,25 @@
 from flask import Blueprint, jsonify, request, make_response, send_file
 from payments.payment_service import PaymentService
 from templates.pdf_service import PDFService
+from settings.company_settings import Settings
 import os
 import io
+from jinja2 import Environment, FileSystemLoader
+from datetime import datetime
+
+# Get absolute path to templates directory
+TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'templates')
 
 bp = Blueprint("invoice_web", __name__)
+
+@bp.route("/invoices/index.html", methods=["GET"])
+def invoice_index():
+    """
+    Serve the main invoice display page from templates
+    """
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    template = env.get_template('index.html')
+    return template.render()
 
 @bp.route("/invoice/<int:invoice_id>/details/index.html", methods=["GET"])
 def invoice_html_view(invoice_id):
@@ -17,10 +32,16 @@ def invoice_html_view(invoice_id):
         if not invoice_data:
             return jsonify({"error": "Invoice not found"}), 404
         
-        # Render HTML template from root directory
-        from jinja2 import Environment, FileSystemLoader
-        env = Environment(loader=FileSystemLoader('.'))
+        # Get company settings
+        company_settings = Settings.query.first()
+        
+        # Render HTML template from templates directory
+        env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
         template = env.get_template('invoice_template.html')
+        invoice_data['generated_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Add base URL for images
+        invoice_data['base_url'] = request.host_url.rstrip('/')
+        invoice_data['company_settings'] = company_settings
         html_content = template.render(**invoice_data)
         return html_content
         
@@ -69,13 +90,16 @@ def invoice_received_html_view(invoice_id):
         if invoice_data['summary']['payment_status'] != 'Paid':
             return jsonify({"error": "Invoice is not fully paid yet"}), 400
         
-        # Render received payment template
-        from jinja2 import Environment, FileSystemLoader
-        from datetime import datetime
+        # Get company settings
+        company_settings = Settings.query.first()
         
-        env = Environment(loader=FileSystemLoader('.'))
+        # Render received payment template
+        env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
         template = env.get_template('invoice_received_template.html')
         invoice_data['generated_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Add base URL for images
+        invoice_data['base_url'] = request.host_url.rstrip('/')
+        invoice_data['company_settings'] = company_settings
         html_content = template.render(**invoice_data)
         return html_content
         
@@ -93,13 +117,16 @@ def download_invoice_html(invoice_id):
         if not invoice_data:
             return jsonify({"error": "Invoice not found"}), 404
         
-        # Render HTML template for download
-        from jinja2 import Environment, FileSystemLoader
-        from datetime import datetime
+        # Get company settings
+        company_settings = Settings.query.first()
         
-        env = Environment(loader=FileSystemLoader('.'))
+        # Render HTML template for download
+        env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
         template = env.get_template('invoice_template.html')
         invoice_data['generated_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Add base URL for images
+        invoice_data['base_url'] = request.host_url.rstrip('/')
+        invoice_data['company_settings'] = company_settings
         html_content = template.render(**invoice_data, download_mode=True)
         
         response = make_response(html_content)
@@ -125,13 +152,16 @@ def download_received_invoice_html(invoice_id):
         if invoice_data['summary']['payment_status'] != 'Paid':
             return jsonify({"error": "Invoice is not fully paid yet"}), 400
         
-        # Render received payment template for download
-        from jinja2 import Environment, FileSystemLoader
-        from datetime import datetime
+        # Get company settings
+        company_settings = Settings.query.first()
         
-        env = Environment(loader=FileSystemLoader('.'))
+        # Render received payment template for download
+        env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
         template = env.get_template('invoice_received_template.html')
         invoice_data['generated_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Add base URL for images
+        invoice_data['base_url'] = request.host_url.rstrip('/')
+        invoice_data['company_settings'] = company_settings
         html_content = template.render(**invoice_data, download_mode=True)
         
         response = make_response(html_content)

@@ -1,5 +1,5 @@
 from datetime import datetime
-from extensions import db
+from src.extensions import db
 import pandas as pd
 
 class Customer(db.Model):

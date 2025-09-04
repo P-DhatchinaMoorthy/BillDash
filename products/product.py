@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from extensions import db
+from src.extensions import db
 from sqlalchemy import event
 import uuid
 
@@ -63,10 +63,10 @@ class Product(db.Model):
     # Last Updated Date (automate only when updated)
     last_updated = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
-    # Relationships
-    invoice_items = db.relationship("InvoiceItem", backref="product_ref", lazy=True)
-    sales_no_invoice = db.relationship("SaleNoInvoice", backref="product_ref", lazy=True)
-    stock_transactions = db.relationship("StockTransaction", backref="product_ref", lazy=True)
+    # Relationships - using back_populates to avoid circular imports
+    # invoice_items = db.relationship("InvoiceItem", backref="product_ref", lazy=True)
+    # sales_no_invoice = db.relationship("SaleNoInvoice", backref="product_ref", lazy=True)
+    # stock_transactions = db.relationship("StockTransaction", backref="product_ref", lazy=True)
 
     # auto-calc selling price: purchase_price * 1.10
     def compute_selling_price(self):

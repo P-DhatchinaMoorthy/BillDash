@@ -1,5 +1,6 @@
 from datetime import datetime
-from extensions import db
+from src.extensions import db
+from decimal import Decimal
 
 class Category(db.Model):
     __tablename__ = "categories"
@@ -9,9 +10,13 @@ class Category(db.Model):
     description = db.Column(db.Text, nullable=True)
     subcategory_id = db.Column(db.Integer, nullable=True)
     subcategory_name = db.Column(db.String(255), nullable=True)
+    hsn_code = db.Column(db.String(20), nullable=True)
+    cgst_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)
+    sgst_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)
+    igst_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    products = db.relationship("Product", backref="category", lazy=True)
+    # products = db.relationship("Product", backref="category", lazy=True)  # Removed to avoid circular import
 
 class SubCategory(db.Model):
     __tablename__ = "subcategories"

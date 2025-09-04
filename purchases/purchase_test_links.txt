@@ -5,17 +5,36 @@ POST /purchases/add-stock
 PUT /purchases/update-payment/{purchase_id}
 
 ## Purchase Billing
-POST /purchase-billing/pay-supplier
 GET /purchase-billing/
 GET /purchase-billing/{purchase_id}
 GET /purchase-billing/supplier/{supplier_id}
 GET /purchase-billing/supplier/{supplier_id}?payment_status={status}
-GET /purchase-billing/bill/{bill_id}
-PUT /purchase-billing/{bill_id}/status
+
+## Purchase Damage Management
+POST /purchase-billing/damage
+# Required: purchase_id, supplier_id, product_id, quantity_damaged, damage_type ("refund" or "replacement")
+# Optional: damage_reason, notes, created_by
+
+GET /purchase-billing/damage
+# List all damage records
+
+GET /purchase-billing/damage?supplier_id={supplier_id}
+# Filter damage records by supplier
+
+GET /purchase-billing/damage/{damage_id}
+# Get detailed damage record with supplier, product, financial and status info
+
+PUT /purchase-billing/damage/{damage_id}/status
+# Update damage status, supplier_response, refund_amount, replacement details
 
 ## Purchase Returns & Adjustments
 POST /purchase-billing/return
-GET /purchase-billing/adjustments
+GET /purchase-billing/adjustment/
 GET /purchase-billing/adjustment/{adjustment_id}
 POST /purchase-billing/adjustment
+# Product exchange between old and new products
+
+## Purchase Invoice
+GET /purchase-billing/{purchase_id}/invoice
+# Generate HTML invoice for purchase
 

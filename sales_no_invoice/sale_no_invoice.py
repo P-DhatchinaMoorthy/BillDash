@@ -1,6 +1,5 @@
-# models/sale_no_invoice.py
 from datetime import datetime
-from extensions import db
+from src.extensions import db
 
 class SaleNoInvoice(db.Model):
     __tablename__ = "sales_no_invoice"

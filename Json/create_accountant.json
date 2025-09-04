@@ -1,0 +1,13 @@
+{
+  "username": "accountant",
+  "password": "accountant123",
+  "role": "accountant",
+  "permissions": {
+    "customers": {"read": true, "write": true, "delete": false},
+    "invoices": {"read": true, "write": true, "delete": true},
+    "payments": {"read": true, "write": true, "delete": true},
+    "suppliers": {"read": true, "write": false, "delete": false},
+    "products": {"read": true, "write": false, "delete": false},
+    "reports": {"read": true, "write": false, "delete": false}
+  }
+}

@@ -1,5 +1,5 @@
 from datetime import datetime
-from extensions import db
+from src.extensions import db
 from sqlalchemy.orm import relationship
 
 class ProductReturn(db.Model):
@@ -38,6 +38,7 @@ class ProductReturn(db.Model):
     # Damage specific fields
     damage_level = db.Column(db.String(20), nullable=True)  # 'Minor', 'Major', 'Total'
     is_resaleable = db.Column(db.Boolean, default=False)
+    product_type = db.Column(db.String(20), nullable=True)  # 'refund', 'replacement' for damage returns
     
     # Processing details
     processed_by = db.Column(db.String(100), nullable=True)

@@ -1,5 +1,5 @@
 from datetime import datetime
-from extensions import db
+from src.extensions import db
 from sqlalchemy.dialects.postgresql import JSON
 import uuid
 

@@ -1,12 +1,15 @@
 from decimal import Decimal
-from src.extensions import db
+from extensions import db
 from suppliers.supplier import Supplier
 from purchases.purchase_bill import PurchaseBill
 from datetime import datetime
+
+
 class PurchaseBillingService:
     @staticmethod
-    def create_purchase_bill_with_payment(supplier_id, supplier_name, contact_person, email, phone, address, gst_number, 
-                                        payment_amount, payment_method, bank_details=None, transaction_reference=None, notes=None):
+    def create_purchase_bill_with_payment(supplier_id, supplier_name, contact_person, email, phone, address, gst_number,
+                                          payment_amount, payment_method, bank_details=None, transaction_reference=None,
+                                          notes=None):
         """
         Create or update supplier and process purchase bill payment.
         Supplier ID can be reused in purchase bills but must be unique in suppliers table.
@@ -18,7 +21,7 @@ class PurchaseBillingService:
             existing = Supplier.query.filter_by(id=supplier_id).first()
             if existing:
                 raise ValueError(f"Supplier ID {supplier_id} already exists")
-            
+
             supplier = Supplier(
                 id=supplier_id,
                 name=supplier_name,
@@ -37,7 +40,7 @@ class PurchaseBillingService:
             supplier.phone = phone
             supplier.address = address
             supplier.gst_number = gst_number
-        
+
         # Create purchase bill
         bill_number = f"PB-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         purchase_bill = PurchaseBill(

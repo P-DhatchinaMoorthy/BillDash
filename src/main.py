@@ -4,8 +4,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, jsonify
 from flask_cors import CORS
-from config import Config
-from extensions import db, migrate, login_manager
+from src.config import Config
+from src.extensions import db, migrate
+# Import models to ensure they're registered with SQLAlchemy
+from user.user import User, Permission, UserPermission, AuditLog
+from settings.company_settings import Settings
 
 # register blueprints dynamically
 from routes import register_routes
@@ -13,6 +16,7 @@ from routes import register_routes
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
     app.config['SESSION_TYPE'] = 'filesystem'
 
     # Enable CORS for all routes
@@ -21,17 +25,6 @@ def create_app():
     # initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
-    login_manager.init_app(app)
-    login_manager.login_view = 'user.login'
-    
-    # Initialize auth middleware
-    from user.auth_middleware import init_auth_middleware
-    init_auth_middleware(app)
-    
-    @login_manager.user_loader
-    def load_user(user_id):
-        from user.user import User
-        return User.query.get(int(user_id))
 
     # register routes/blueprints
     register_routes(app)
@@ -53,7 +46,9 @@ def create_app():
     def serve_addons(filename):
         from flask import send_file
         import os
-        addon_path = os.path.join('addons', filename)
+        # Get absolute path to addons directory
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        addon_path = os.path.join(backend_dir, 'addons', filename)
         if os.path.exists(addon_path):
             return send_file(addon_path, mimetype='image/png')
         else:

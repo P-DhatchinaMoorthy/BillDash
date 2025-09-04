@@ -1,11 +1,12 @@
-# routes/sale_no_invoice_routes.py
 from flask import Blueprint, request, jsonify
 from extensions import db
 from sales_no_invoice.sale_no_invoice_service import SaleNoInvoiceService
+from user.auth_bypass import require_permission
 
 bp = Blueprint("sales_no_invoice", __name__)
 
 @bp.route("/", methods=["POST"])
+@require_permission('sales', 'write')
 def create_sale_no_invoice():
     payload = request.get_json() or {}
     product_id = payload.get("product_id")
@@ -36,6 +37,7 @@ def create_sale_no_invoice():
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/", methods=["GET"])
+@require_permission('sales', 'read')
 def list_sales_no_invoice():
     from sales_no_invoice.sale_no_invoice import SaleNoInvoice
     sales = SaleNoInvoice.query.all()
@@ -57,6 +59,7 @@ def list_sales_no_invoice():
     } for s in sales]), 200
 
 @bp.route("/<sale_id>", methods=["GET"])
+@require_permission('sales', 'read')
 def get_sale_no_invoice(sale_id):
     from sales_no_invoice.sale_no_invoice import SaleNoInvoice
     s = SaleNoInvoice.query.get(sale_id)
@@ -92,6 +95,7 @@ def get_sale_no_invoice(sale_id):
     }), 200
 
 @bp.route("/<sale_id>", methods=["PUT"])
+@require_permission('sales', 'write')
 def update_sale_no_invoice(sale_id):
     from sales_no_invoice.sale_no_invoice import SaleNoInvoice
     s = SaleNoInvoice.query.get(sale_id)

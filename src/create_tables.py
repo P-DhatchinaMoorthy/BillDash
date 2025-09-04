@@ -16,7 +16,7 @@ from returns.product_return import ProductReturn, DamagedProduct
 from sales_no_invoice.sale_no_invoice import SaleNoInvoice
 from stock_transactions.stock_transaction import StockTransaction
 from suppliers.supplier import Supplier
-from user.user import User, Role, Permission, RolePermission
+from users.user import User, Role, Permission, RolePermission
 
 def create_tables():
     db.drop_all()

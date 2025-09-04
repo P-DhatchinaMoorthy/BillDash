@@ -1,0 +1,68 @@
+UPDATED API ENDPOINT SAMPLE JSON REQUESTS (NO CUSTOMER_ID REQUIRED)
+===================================================================
+
+1. POST /returns/ - Create Product Return
+{
+  "product_id": 7004,
+  "invoice_id": 4035,
+  "quantity_returned": 1,
+  "reason": "Product defective",
+  "notes": "Customer reported quality issues"
+}
+
+2. POST /damaged-products/ - Create Damaged Product Return (Refund)
+{
+  "product_id": 7004,
+  "invoice_id": 4035,
+  "type": "need refund",
+  "quantity_returned": 1,
+  "damage_level": "Accessory damaged",
+  "notes": "Product severely damaged during shipping"
+}
+
+3. POST /damaged-products/ - Create Damaged Product Return (Replacement)
+{
+  "product_id": 7004,
+  "invoice_id": 4035,
+  "type": "need replacement",
+  "quantity_returned": 1,
+  "damage_level": "Accessory damaged",
+  "notes": "Replacement sent, damaged item stored separately"
+}
+
+4. POST /adjustments/ - Create Product Adjustment/Exchange
+{
+  "product_id": 7004,
+  "invoice_id": 4035,
+  "new_product_id": 7005,
+  "quantity_returned": 1,
+  "exchange_quantity": 1,
+  "notes": "Customer wants to exchange for different model"
+}
+
+REQUIRED FIELDS:
+================
+
+POST /returns/:
+- product_id (required)
+- invoice_id (required)
+
+POST /damaged-products/:
+- product_id (required)
+- invoice_id (required)
+- type (required: "need refund" or "need replacement")
+
+POST /adjustments/:
+- product_id (required)
+- invoice_id (required)
+- new_product_id (required)
+
+OPTIONAL FIELDS:
+================
+- quantity_returned (default: 1)
+- damage_level (for damaged products)
+- exchange_quantity (for adjustments, default: same as quantity_returned)
+- reason (optional)
+- notes (optional)
+
+NOTE: customer_id is automatically fetched from the invoice

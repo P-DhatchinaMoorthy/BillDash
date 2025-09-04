@@ -8,7 +8,7 @@ from customers.customer import Customer
 from suppliers.supplier import Supplier
 from sqlalchemy import func, desc
 from datetime import datetime, date
-from extensions import db
+from src.extensions import db
 
 class ReportService:
     @staticmethod
@@ -39,7 +39,8 @@ class ReportService:
         
         for damaged in damaged_products:
             category_id = damaged.product.category_id if damaged.product else None
-            category_name = damaged.product.category.name if damaged.product and damaged.product.category else "Unknown"
+            category = Category.query.get(damaged.product.category_id) if damaged.product and damaged.product.category_id else None
+            category_name = category.name if category else "Unknown"
             
             if category_id not in damaged_by_category:
                 damaged_by_category[category_id] = {

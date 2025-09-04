@@ -1,4 +1,4 @@
-from extensions import db
+from src.extensions import db
 from products.product import Product
 from suppliers.supplier import Supplier
 

@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, send_file, make_response
 from extensions import db
 from customers.customer import Customer
+from user.auth_middleware import require_permission
 import pandas as pd
 import io
 import os
@@ -27,6 +28,7 @@ def handle_options():
 
 # -------------------- CREATE CUSTOMER --------------------
 @bp.route("/", methods=["POST", "OPTIONS"])
+@require_permission('customers', 'write')
 def create_customer():
     if request.content_type and 'multipart/form-data' in request.content_type:
         data = request.form.to_dict()
@@ -85,6 +87,7 @@ def create_customer():
 
 # -------------------- LIST CUSTOMERS --------------------
 @bp.route("/", methods=["GET", "OPTIONS"])
+@require_permission('customers', 'read')
 def list_customers():
     page = int(request.args.get('page', 1))
     per_page = 10
@@ -150,6 +153,7 @@ def list_customers():
 
 # -------------------- GET CUSTOMER --------------------
 @bp.route("/<customer_id>", methods=["GET", "OPTIONS"])
+@require_permission('customers', 'read')
 def get_customer(customer_id):
     try:
         customer_id = int(customer_id)
@@ -182,6 +186,7 @@ def get_customer(customer_id):
 
 # -------------------- UPDATE CUSTOMER --------------------
 @bp.route("/<customer_id>", methods=["PUT", "OPTIONS"])
+@require_permission('customers', 'write')
 def update_customer(customer_id):
     try:
         customer_id = int(customer_id)
@@ -212,6 +217,7 @@ def update_customer(customer_id):
 
 # -------------------- GET CUSTOMER INVOICES --------------------
 @bp.route("/<customer_id>/invoices", methods=["GET", "OPTIONS"])
+@require_permission('customers', 'read')
 def get_customer_invoices(customer_id):
     try:
         customer_id = int(customer_id)
@@ -275,6 +281,7 @@ def get_customer_invoices(customer_id):
 
 # -------------------- EXPORT CUSTOMERS --------------------
 @bp.route("/export", methods=["GET", "OPTIONS"])
+@require_permission('customers', 'read')
 def export_customers():
     try:
         format_type = request.args.get('format', 'csv').lower()
@@ -327,6 +334,7 @@ def export_customers():
 
 # -------------------- BULK IMPORT --------------------
 @bp.route("/bulk-import", methods=["POST", "OPTIONS"])
+@require_permission('customers', 'write')
 def bulk_import_customers():
     try:
         if 'file' not in request.files:

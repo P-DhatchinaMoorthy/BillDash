@@ -1,198 +1,268 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Purchase Invoice</title>
-    <style>
-        @page { size: A4; margin: 0.5in; }
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-        .invoice-box { max-width: 800px; margin: 0 auto; background: white; border: none; box-shadow: 0 0 10px rgba(0,0,0,0.1); padding: 30px; }
-        .invoice-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4472C4; padding-bottom: 20px; }
-        .invoice-title { font-size: 28px; font-weight: bold; color: #4472C4; margin-bottom: 5px; }
-        .company-details { display: flex; justify-content: space-between; margin-bottom: 30px; }
-        .company-info, .supplier-info { width: 45%; }
-        .section-title { font-size: 16px; font-weight: bold; color: #4472C4; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-        .info-text { font-size: 12px; line-height: 1.4; margin: 2px 0; }
-        .purchase-info { display: flex; justify-content: space-between; margin: 20px 0; padding: 15px; background: #f8f9fa; border-left: 4px solid #4472C4; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th { background: #4472C4; color: white; padding: 12px 8px; font-size: 12px; font-weight: bold; text-align: center; }
-        td { padding: 10px 8px; font-size: 11px; border-bottom: 1px solid #ddd; text-align: center; }
-        .product-info { text-align: left; vertical-align: middle; padding-left: 20px; }
-        .totals-table { width: 40%; margin-left: auto; margin-top: 20px; }
-        .totals-table td { border: 1px solid #ddd; padding: 8px; font-weight: bold; }
-        .totals-table td:first-child { text-align: left; }
-        .totals-table td:last-child { text-align: right; }
-        .totals-table .amount { display: flex; justify-content: space-between; }
-        .grand-total { background: #4472C4; color: white; }
-        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 11px; color: #666; }
-        .download-btn { position: fixed; top: 20px; right: 20px; background: #4472C4; color: white; padding: 12px 20px; border: none; border-radius: 5px; text-decoration: none; font-weight: bold; }
-        @media print { .download-btn { display: none; } body { background: white; padding: 0; } .invoice-box { box-shadow: none; } }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Purchase Receipt</title>
+<style>
+  /* Page */
+  :root {
+    --ink: #000;
+    --muted: #444;
+    --accent: #0b5fa5; /* ForceIntellect blue */
+    --accent-orange: #f0592b;
+    --border: #111;
+  }
+  @page { size: A4 landscape; margin: 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #f5f5f5; font-family: Arial, Helvetica, sans-serif; color: var(--ink);
+  }
+  .page {
+    width: 1122px; /* ~A4 landscape at 96dpi */
+    min-height: 794px;
+    margin: 16px auto; background: #fff; border: 1px solid #bbb; padding: 18px 22px; position: relative;
+  }
+  .header { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+  .logo {
+    display: inline-block; font-weight: 700; font-size: 30px; letter-spacing: 0.2px;
+  }
+  .logo .force{ color: var(--accent); }
+  .logo .intellect{ color: var(--accent-orange); font-weight: 600; }
+  .tagline{ font-size: 11px; color: #888; margin-top: 2px; }
+
+  .company {
+    text-align: center; font-weight: 700; font-size: 14px; line-height: 1.25;
+  }
+  .company small { font-weight: 400; display: block; color: var(--muted); }
+  .title {
+    margin: 14px 0 8px; border: 3px solid #000; text-align: center; font-weight: 700; padding: 6px 10px; width: 360px; margin-left: auto; margin-right: auto; font-size: 15px;
+  }
+
+  .authorized { position: absolute; right: 22px; top: 90px; font-weight: 700; font-size: 12px; }
+
+  .info { border: 1px solid var(--border); margin-top: 8px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
+  .cell { padding: 8px 10px; font-size: 12px; }
+  .cell b { font-weight: 700; }
+  .row:last-child { border-bottom: none; }
+
+  .subgrid { display: grid; grid-template-columns: 120px 1fr 140px 1fr; gap: 0; }
+  .subgrid .kv { border-left: 1px solid var(--border); padding: 8px 10px; font-size: 12px; }
+  .subgrid .kv:nth-child(1) { border-left: none; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+  th, td { border: 1px solid #000; padding: 6px 6px; vertical-align: top; }
+  th { text-align: center; font-weight: 700; }
+  td { line-height: 1.25; }
+  .t-center { text-align: center; }
+  .t-right { text-align: right; }
+  .w-sno { width: 8%; }
+  .w-desc { width: 35%; }
+  .w-uom { width: 12%; }
+  .w-qty { width: 10%; }
+  .w-rate { width: 15%; }
+  .w-value { width: 20%; }
+
+  .grand-total { display: grid; grid-template-columns: 1fr 180px; }
+  .grand-total .label { border: 1px solid #000; border-top: none; padding: 6px 8px; text-align: right; font-weight: 700; }
+  .grand-total .value { border: 1px solid #000; border-top: none; border-left: none; padding: 6px 8px; text-align: right; font-weight: 700; }
+
+  .footer { display: grid; grid-template-columns: 1fr 1fr; margin-top: 10px; color: #555; font-size: 11px; }
+  .footer-right { text-align: right; }
+
+  /* Helpers */
+  .muted { color: #666; }
+  .mono { font-family: "Courier New", monospace; }
+</style>
 </head>
 <body>
-    <button onclick="downloadPDF()" class="download-btn">Download PDF</button>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script>
-        function downloadPDF() {
-            const element = document.querySelector('.invoice-box');
-            html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                allowTaint: true
-            }).then(canvas => {
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const imgData = canvas.toDataURL('image/png');
-                const imgWidth = 210;
-                const pageHeight = 295;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                let heightLeft = imgHeight;
-                let position = 0;
-                
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
-                
-                while (heightLeft >= 0) {
-                    position = heightLeft - imgHeight;
-                    pdf.addPage();
-                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                    heightLeft -= pageHeight;
-                }
-                
-                pdf.save(`purchase_invoice_{{ purchase_id }}.pdf`);
-            });
-        }
-    </script>
-    <div class="invoice-box">
-        <div class="invoice-header">
-            <div class="invoice-title">PURCHASE INVOICE</div>
-            <div class="info-text">Invoice #{{ purchase_id }}</div>
-        </div>
-        
-        <div class="company-details">
-            <div class="supplier-info">
-                <div class="section-title">Supplier Details</div>
-                <div class="info-text"><strong>{{ data.supplier_details.name }}</strong></div>
-                <div class="info-text">{{ data.supplier_details.address }}</div>
-                <div class="info-text">Contact: {{ data.supplier_details.contact_person }}</div>
-                <div class="info-text">Phone: {{ data.supplier_details.phone }}</div>
-                <div class="info-text">Email: {{ data.supplier_details.email }}</div>
-                <div class="info-text">GST: {{ data.supplier_details.gst_number }}</div>
-            </div>
-            <div class="company-info">
-                <div class="section-title">{{ our_company.name }}</div>
-                <div class="info-text">{{ our_company.address }}</div>
-                <div class="info-text">Phone: {{ our_company.phone }}</div>
-                <div class="info-text">Email: {{ our_company.email }}</div>
-                <div class="info-text">GST: {{ our_company.gst }}</div>
-            </div>
-        </div>
-
-        <div class="purchase-info">
-            <div><strong>Purchase Reference:</strong> {{ data.purchase_details.reference_number }}</div>
-            <div><strong>Date:</strong> {{ data.purchase_details.purchase_date }}</div>
-        </div>
-
-        <table>
-            <tr>
-                <th style="text-align: center;">Sl No</th>
-                <th style="text-align: center;">Description</th>
-                <th style="text-align: center;">Product Info</th>
-                <th style="text-align: center;">SKU</th>
-                <th style="text-align: center;">Batch</th>
-                <th style="text-align: center;">Qty</th>
-                <th style="text-align: center;">Unit</th>
-                <th style="text-align: center;">Price</th>
-                <th style="text-align: center;">Total</th>
-            </tr>
-            {% if data.products %}
-                {% for product in data.products %}
-                <tr>
-                    <td>{{ loop.index }}</td>
-                    <td>{{ product.product_details.name }}</td>
-                    <td class="product-info" style="font-size: 10px;">
-                        ID: {{ product.product_details.product_id }}<br>
-                        Sup: {{ data.supplier_details.supplier_id }}<br>
-                        Cat: {{ product.product_details.category_id }}<br>
-                        Sub: {{ product.product_details.subcategory_id }}
-                    </td>
-                    <td style="text-align: center;">{{ product.product_details.sku }}</td>
-                    <td>{{ product.product_details.batch_number }}</td>
-                    <td>{{ product.purchase_details.quantity_purchased }}</td>
-                    <td>{{ product.product_details.unit_of_measure }}</td>
-                    <td>{{ product.product_details.purchase_price }}</td>
-                    <td>Rs. {{ "%.2f"|format(product.purchase_details.quantity_purchased * (product.product_details.purchase_price | float)) }}</td>
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr>
-                    <td>1</td>
-                    <td>{{ data.product_details.name }}</td>
-                    <td class="product-info" style="font-size: 10px;">
-                        ID: {{ data.product_details.product_id }}<br>
-                        Sup: {{ data.supplier_details.supplier_id }}<br>
-                        Cat: {{ data.product_details.category_id }}<br>
-                        Sub: {{ data.product_details.subcategory_id }}
-                    </td>
-                    <td style="text-align: center;">{{ data.product_details.sku }}</td>
-                    <td>{{ data.product_details.batch_number }}</td>
-                    <td>{{ data.purchase_details.quantity_purchased }}</td>
-                    <td>{{ data.product_details.unit_of_measure }}</td>
-                    <td>{{ data.product_details.purchase_price }}</td>
-                    <td>Rs. {{ "%.2f"|format(data.purchase_details.quantity_purchased * (data.product_details.purchase_price | float)) }}</td>
-                </tr>
-            {% endif %}
-        </table>
-
-        <table class="totals-table">
-            <tr>
-                <td>Subtotal:</td>
-                <td><span class="amount"><span>Rs.</span><span>{{ data.payment_details.grand_total }}</span></span></td>
-            </tr>
-            <tr>
-                <td>Grand Total:</td>
-                <td><span class="amount"><span>Rs.</span><span>{{ data.payment_details.grand_total }}</span></span></td>
-            </tr>
-            <tr>
-                <td>Amount Paid:</td>
-                <td style="background: #d4edda; color: #155724;"><span class="amount"><span>Rs.</span><span>{{ "%.2f"|format(data.payment_details.payment_amount|float) }}</span></span></td>
-            </tr>
-            {% if data.payment_details.balance_amount|float > 0 %}
-            <tr>
-                <td>Balance Due:</td>
-                <td style="color: #dc3545; background: #f8d7da;"><span class="amount"><span>Rs.</span><span>{{ data.payment_details.balance_amount }}</span></span></td>
-            </tr>
-            {% elif data.payment_details.balance_amount|float < 0 %}
-            <tr>
-                <td>Excess Paid:</td>
-                <td style="color: #28a745; background: #d1ecf1;"><span class="amount"><span>Rs.</span><span>{{ "%.2f"|format((data.payment_details.balance_amount|float) * -1) }}</span></span></td>
-            </tr>
-            <tr>
-                <td><strong>Amount to Return by Supplier:</strong></td>
-                <td style="color: #fd7e14; background: #fff3cd; font-weight: bold;"><span class="amount"><span>Rs.</span><span>{{ "%.2f"|format((data.payment_details.balance_amount|float) * -1) }}</span></span></td>
-            </tr>
-            {% else %}
-            <tr>
-                <td>Balance Due:</td>
-                <td style="color: #28a745; background: #d4edda;"><span class="amount"><span>Rs.</span><span>0.00 (Fully Paid)</span></span></td>
-            </tr>
-            {% endif %}
-            <tr class="grand-total">
-                <td>Payment Status:</td>
-                <td>{{ data.payment_details.payment_status }}</td>
-            </tr>
-        </table>
-
-        <div class="footer">
-            <div><strong>Notes:</strong> {{ data.stock_transaction.notes }}</div>
-            <div style="text-align: center; margin-top: 20px; font-style: italic;">
-                Certified that the particulars given above are true and correct.
-            </div>
-            <div style="text-align: center; margin-top: 10px; color: #999;">
-                Thank you for your business!
-            </div>
-        </div>
+  <div class="page">
+    <div class="header">
+      <div>
+        <div class="logo"><span class="force" id="companyName1">Loading</span>
+            <span class="intellect" id="companyName2">...</span></div>
+        <div class="tagline" id="companyTagline" style="margin-left: 25px">Loading...</div>
+      </div>
+      <div class="company" style="margin-left: 100px">
+        <span id="businessName">Loading...</span><br />
+        <small id="companyAddress">Loading company details...</small>
+      </div>
     </div>
+
+    <div class="info">
+      <div class="row">
+        <div class="cell"><b>ORDER NO.</b> : <span id="grnNumber">Loading...</span></div>
+        <div class="cell t-right"><b>PURCHASE DATE</b> : <span class="mono" id="grnDate">Loading...</span></div>
+      </div>
+      <div class="row">
+        <div class="cell">
+          <b>From,</b><br />
+          <b>Supplier ID:</b> <span id="supplierId">Loading...</span><br />
+          <b id="supplierName">Loading...</b><br />
+          <b><span id="supplierContactPerson">Loading...</span><br />
+          <b><span id="supplierPhone">Loading...</span><br /></b>
+          <b><span id="supplierEmail">Loading...</span><br /></b>
+          <b><span id="supplierAddress">Loading...</span><br /></b>
+          <b><span id="supplierGST">Loading...</b></span>
+        </div>
+        <div class="cell">
+        </div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="w-sno">Sl. No.</th>
+          <th>Product ID</th>
+          <th class="w-desc">Product Name</th>
+          <th class="w-qty">Quantity</th>
+          <th class="w-rate">Rate</th>
+          <th class="w-value">Total Value</th>
+        </tr>
+      </thead>
+      <tbody id="productTableBody">
+        <tr>
+          <td colspan="8" class="t-center">Loading...</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="grand-total">
+      <div class="label">Grand Total :</div>
+      <div class="value" id="grandTotal">0.00</div>
+    </div>
+
+    <div class="row" style="border: none; margin-top: 12px;">
+      <div class="cell" style="padding-left:0;">
+        <b>Authorized</b> : <span id="authorized">Yes</span>
+      </div>
+      <div class="cell t-right" style="padding-right:0;">
+        <b>Inspection Required</b> : <span id="inspectionRequired">Yes</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div id="footerDate">Loading...</div>
+      <div class="footer-right">Page 1 of 1</div>
+    </div>
+  </div>
+
+  <script>
+    // Extract purchase ID from URL path
+    const pathParts = window.location.pathname.split('/');
+    const purchaseId = pathParts[pathParts.indexOf('purchase-billing') + 1] || '5001';
+    
+    // Fetch company settings first
+    fetch('http://localhost:5000/settings/')
+      .then(response => response.json())
+      .then(settings => {
+        // Update company details
+        const businessName = settings.business_name || 'Company Name';
+        const nameParts = businessName.split(' ');
+        document.getElementById('companyName1').textContent = nameParts[0] || 'Company';
+        document.getElementById('companyName2').textContent = nameParts.slice(1).join(' ') || 'Name';
+        document.getElementById('companyTagline').textContent = settings.tagline || 'Your Business Tagline';
+        document.getElementById('businessName').textContent = businessName;
+        
+        const addressParts = [];
+        if (settings.registered_address) addressParts.push(settings.registered_address);
+        if (settings.city) addressParts.push(settings.city);
+        if (settings.state) addressParts.push(settings.state);
+        if (settings.postal_code) addressParts.push(settings.postal_code);
+        if (settings.country) addressParts.push(settings.country);
+        
+        const contactParts = [];
+        if (settings.primary_phone) contactParts.push(`Phone: ${settings.primary_phone}`);
+        if (settings.primary_email) contactParts.push(`Email: ${settings.primary_email}`);
+        if (settings.gst_number) contactParts.push(`GST: ${settings.gst_number}`);
+        
+        document.getElementById('companyAddress').innerHTML = 
+          `${addressParts.join(', ')}<br/>${contactParts.join('  ')}`;
+      })
+      .catch(error => console.error('Error fetching company settings:', error));
+    
+    // Fetch purchase details from API
+    fetch(`http://localhost:5000/purchase-billing/${purchaseId}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        // Update GRN details
+        document.getElementById('grnNumber').textContent = `${data.reference_number || purchaseId}`;
+        
+        const purchaseDate = new Date(data.purchase_date);
+        const formattedDate = purchaseDate.toLocaleDateString('en-GB');
+        document.getElementById('grnDate').textContent = formattedDate;
+        
+        // Update supplier details
+        if (data.supplier) {
+          document.getElementById('supplierId').textContent = data.supplier.id || 'N/A';
+          document.getElementById('supplierName').textContent = data.supplier.name || 'N/A';
+          document.getElementById('supplierContactPerson').textContent = data.supplier.contact_person ? `Contact: ${data.supplier.contact_person}` : '';
+          document.getElementById('supplierPhone').textContent = data.supplier.phone ? `Phone: ${data.supplier.phone}` : '';
+          document.getElementById('supplierEmail').textContent = data.supplier.email ? `Email: ${data.supplier.email}` : '';
+          document.getElementById('supplierAddress').textContent = data.supplier.address || '';
+          document.getElementById('supplierGST').textContent = data.supplier.gst_number ? `GST: ${data.supplier.gst_number}` : '';
+        }
+        
+
+        
+        // Update product table
+        const tbody = document.getElementById('productTableBody');
+        tbody.innerHTML = '';
+        
+        let totalValue = 0;
+        
+        data.products.forEach((product, index) => {
+          const quantity = parseFloat(product.quantity);
+          const rate = parseFloat(product.unit_price);
+          const value = quantity * rate;
+          totalValue += value;
+          
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="t-center">${index + 1}</td>
+            <td class="t-center">${product.product_id}</td>
+            <td>${product.name}</td>
+            <td class="t-center">${quantity}</td>
+            <td class="t-right">${rate.toFixed(2)}</td>
+            <td class="t-right">${value.toFixed(2)}</td>
+          `;
+          tbody.appendChild(row);
+        });
+        
+        // Add empty row for spacing with payment status
+        const emptyRow = document.createElement('tr');
+        emptyRow.innerHTML = `<td colspan="6" style="height: 100px; text-align: center; vertical-align: middle; font-weight: bold; font-size: 14px;">PAYMENT : <span id="paymentStatus">${data.status || 'Pending'}</span></td>`;
+        tbody.appendChild(emptyRow);
+        
+        // Update grand total from API data or calculated value
+        const apiTotal = parseFloat(data.payment?.total_amount || totalValue);
+        document.getElementById('grandTotal').textContent = apiTotal.toFixed(2);
+        
+
+        
+        // Update footer date
+        const now = new Date();
+        const footerDate = `${formattedDate} ${now.toLocaleTimeString('en-GB', {hour12: false})}`;
+        document.getElementById('footerDate').textContent = footerDate;
+        
+      })
+      .catch(error => {
+        console.error('Error fetching purchase details:', error);
+        document.getElementById('grnNumber').textContent = 'Error loading data';
+        document.getElementById('grnDate').textContent = 'Error';
+        document.getElementById('supplierName').textContent = 'Error loading supplier';
+        document.getElementById('supplierAddress').textContent = 'Please check API connection';
+        document.getElementById('productTableBody').innerHTML = 
+          '<tr><td colspan="8" class="t-center" style="color: red;">Error loading purchase details. Please check API connection.</td></tr>';
+      });
+  </script>
 </body>
 </html>

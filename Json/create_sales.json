@@ -1,0 +1,13 @@
+{
+  "username": "sales",
+  "password": "sales123",
+  "role": "sales",
+  "permissions": {
+    "customers": {"read": true, "write": false, "delete": false},
+    "products": {"read": true, "write": false, "delete": false},
+    "sales": {"read": true, "write": true, "delete": false},
+    "payments": {"read": true, "write": true, "delete": false},
+    "returns": {"read": true, "write": true, "delete": false},
+    "reports": {"read": true, "write": false, "delete": false}
+  }
+}

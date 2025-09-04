@@ -1,6 +1,6 @@
 # services/return_service.py
 from datetime import datetime
-from extensions import db
+from src.extensions import db
 from returns.product_return import ProductReturn, DamagedProduct
 from products.product import Product
 from stock_transactions.stock_transaction import StockTransaction
@@ -97,7 +97,7 @@ class ReturnService:
     
     @staticmethod
     def _process_damage_return(product_return):
-        """Handle damaged product return - store separately"""
+        """Handle damaged product return - refund or replacement"""
         # Create damaged product record
         damaged_product = DamagedProduct(
             product_id=product_return.product_id,
@@ -109,30 +109,41 @@ class ReturnService:
         )
         db.session.add(damaged_product)
         
-        # Create stock transaction for damaged goods
-        stock_transaction = StockTransaction(
-            product_id=product_return.product_id,
-            transaction_type="Damage",
-            quantity=product_return.quantity_returned,
-            reference_number=product_return.return_number,
-            notes=f"Damaged product return - Level: {product_return.damage_level}"
-        )
-        db.session.add(stock_transaction)
-        
-        # Send replacement if specified
-        if product_return.exchange_product_id:
-            replacement_product = Product.query.get(product_return.exchange_product_id)
-            replacement_product.quantity_in_stock -= product_return.exchange_quantity
+        if product_return.product_type == 'refund':
+            # For refund: deduct stock (returned to supplier) and process refund
+            product = Product.query.get(product_return.product_id)
+            product.quantity_in_stock -= product_return.quantity_returned
             
-            replacement_transaction = StockTransaction(
-                product_id=product_return.exchange_product_id,
-                transaction_type="Sale",
-                sale_type="Replacement",
-                quantity=-product_return.exchange_quantity,
+            # Create stock transaction for refund (deduction)
+            stock_transaction = StockTransaction(
+                product_id=product_return.product_id,
+                transaction_type="Damage_Refund",
+                quantity=-product_return.quantity_returned,
                 reference_number=product_return.return_number,
-                notes="Replacement for damaged product"
+                notes=f"Damage refund - returned to supplier. Level: {product_return.damage_level}"
             )
-            db.session.add(replacement_transaction)
+            db.session.add(stock_transaction)
+            
+            # Set status to Paid for P&L tracking
+            product_return.status = 'Paid'
+            
+        elif product_return.product_type == 'replacement':
+            # For replacement: don't affect stock, send replacement
+            product = Product.query.get(product_return.product_id)
+            product.quantity_in_stock -= product_return.quantity_returned
+            
+            # Create stock transaction for replacement
+            stock_transaction = StockTransaction(
+                product_id=product_return.product_id,
+                transaction_type="Damage_Replacement",
+                quantity=-product_return.quantity_returned,
+                reference_number=product_return.return_number,
+                notes=f"Damage replacement sent. Level: {product_return.damage_level}"
+            )
+            db.session.add(stock_transaction)
+            
+            # Set refund amount to 0 for replacement
+            product_return.refund_amount = 0
     
     @staticmethod
     def get_return_summary():
@@ -189,20 +200,111 @@ class ReturnService:
     
     @staticmethod
     def get_damaged_products_inventory():
-        """Get inventory of damaged products"""
-        damaged_products = db.session.query(DamagedProduct).filter(
-            DamagedProduct.status == 'Stored'
-        ).all()
+        """Get comprehensive inventory of damaged products with all details"""
+        damaged_products = db.session.query(DamagedProduct).all()
         
         inventory = []
+        total_damage_value = 0
+        
         for item in damaged_products:
+            # Get return details
+            return_record = item.return_record if item.return_record else None
+            
+            # Get customer details
+            customer = None
+            if return_record and return_record.customer:
+                customer = return_record.customer
+            
+            # Get invoice details
+            invoice = None
+            if return_record and return_record.original_invoice:
+                invoice = return_record.original_invoice
+            
+            # Get product details with category
+            product = item.product
+            category = None
+            if product and product.category_id:
+                from category.category import Category
+                category = Category.query.get(product.category_id)
+            
+            # Get payment details if invoice exists
+            payment_details = None
+            if invoice:
+                from payments.payment import Payment
+                payments = Payment.query.filter_by(invoice_id=invoice.id).all()
+                total_paid = sum([float(p.amount_paid) for p in payments])
+                payment_details = {
+                    "total_invoice_amount": float(invoice.grand_total),
+                    "total_paid": total_paid,
+                    "pending_amount": float(invoice.grand_total) - total_paid,
+                    "payment_status": "Paid" if total_paid >= float(invoice.grand_total) else "Pending"
+                }
+            
+            # Calculate damage value
+            damage_value = float(return_record.original_price) * item.quantity if return_record else 0
+            total_damage_value += damage_value
+            
             inventory.append({
-                "id": item.id,
-                "product_name": item.product.product_name,
-                "quantity": item.quantity,
+                "damaged_product_id": item.id,
+                "return_id": item.return_id,
+                "return_number": return_record.return_number if return_record else None,
+                "quantity_damaged": item.quantity,
                 "damage_level": item.damage_level,
-                "damage_date": item.damage_date.strftime("%Y-%m-%d"),
-                "storage_location": item.storage_location
+                "damage_reason": item.damage_reason,
+                "damage_date": item.damage_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "storage_location": item.storage_location,
+                "status": item.status,
+                "action_taken": item.action_taken,
+                "repair_cost": float(item.repair_cost) if item.repair_cost else 0,
+                "damage_value": damage_value,
+                "customer_details": {
+                    "customer_id": customer.id if customer else None,
+                    "customer_name": customer.contact_person if customer else None,
+                    "business_name": customer.business_name if customer else None,
+                    "phone": customer.phone if customer else None,
+                    "email": customer.email if customer else None,
+                    "address": customer.billing_address if customer else None
+                } if customer else None,
+                "product_details": {
+                    "product_id": product.id if product else None,
+                    "product_name": product.product_name if product else None,
+                    "sku": product.sku if product else None,
+                    "original_price": float(return_record.original_price) if return_record else 0,
+                    "current_stock": product.quantity_in_stock if product else 0,
+                    "category_name": category.name if category else None
+                } if product else None,
+                "invoice_details": {
+                    "invoice_id": invoice.id if invoice else None,
+                    "invoice_number": invoice.invoice_number if invoice else None,
+                    "invoice_date": invoice.invoice_date.strftime("%Y-%m-%d") if invoice else None,
+                    "grand_total": float(invoice.grand_total) if invoice else 0,
+                    "payment_terms": invoice.payment_terms if invoice else None
+                } if invoice else None,
+                "payment_details": payment_details,
+                "refund_details": {
+                    "refund_amount": float(return_record.refund_amount) if return_record and return_record.refund_amount else 0,
+                    "refund_status": return_record.status if return_record else None,
+                    "return_date": return_record.return_date.strftime("%Y-%m-%d %H:%M:%S") if return_record else None
+                } if return_record else None
             })
         
-        return inventory
+        # Summary statistics
+        summary = {
+            "total_damaged_items": len(damaged_products),
+            "total_damage_value": total_damage_value,
+            "by_status": {
+                "stored": len([i for i in damaged_products if i.status == 'Stored']),
+                "repaired": len([i for i in damaged_products if i.status == 'Repaired']),
+                "disposed": len([i for i in damaged_products if i.status == 'Disposed'])
+            },
+            "by_damage_level": {
+                "minor": len([i for i in damaged_products if i.damage_level == 'Minor']),
+                "major": len([i for i in damaged_products if i.damage_level == 'Major']),
+                "total": len([i for i in damaged_products if i.damage_level == 'Total'])
+            }
+        }
+        
+        return {
+            "summary": summary,
+            "damaged_products": inventory
+        }

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from invoices.invoice_service import InvoiceService
 from invoices.invoice import Invoice
-from extensions import db
+from src.extensions import db
 from sqlalchemy import or_
 import pandas as pd
 import io
@@ -13,7 +13,7 @@ bp = Blueprint("invoices", __name__)
 def create_invoice():
     payload = request.get_json() or {}
     customer_id = payload.get("customer_id")
-    items = payload.get("items")  # list of {product_id, quantity, tax_rate_per_item}
+    items = payload.get("items")  # list of {product_id, quantity, discount_per_item(optional), discount_type(optional)}
     if not items or not isinstance(items, list):
         return jsonify({"error": "items list is required"}), 400
     try:
@@ -34,9 +34,8 @@ def create_invoice():
             additional_discount_type=payload.get("additional_discount_type", "percentage")
         )
 
-        # Auto-create payment record
         from payments.payment import Payment
-        from extensions import db as ext_db
+        from src.extensions import db as ext_db
         payment = Payment(
             invoice_id=invoice.id,
             customer_id=customer_id,
@@ -64,6 +63,9 @@ def create_invoice():
             "invoice_totals": {
                 "total_before_tax": str(invoice.total_before_tax),
                 "tax_amount": str(invoice.tax_amount),
+                "cgst_amount": str(invoice.cgst_amount),
+                "sgst_amount": str(invoice.sgst_amount),
+                "igst_amount": str(invoice.igst_amount),
                 "discount_amount": str(invoice.discount_amount),
                 "shipping_charges": str(invoice.shipping_charges),
                 "other_charges": str(invoice.other_charges),
@@ -162,6 +164,9 @@ def list_invoices():
                 "due_date": i.due_date.isoformat() if i.due_date else None,
                 "total_before_tax": str(i.total_before_tax),
                 "tax_amount": str(i.tax_amount),
+                "cgst_amount": str(getattr(i, 'cgst_amount', 0)),
+                "sgst_amount": str(getattr(i, 'sgst_amount', 0)),
+                "igst_amount": str(getattr(i, 'igst_amount', 0)),
                 "discount_amount": str(i.discount_amount),
                 "shipping_charges": str(i.shipping_charges),
                 "other_charges": str(i.other_charges),
@@ -363,6 +368,9 @@ def get_invoice_by_id(invoice_id):
             "business_name": customer.business_name if customer else None,
             "invoice_date": invoice.invoice_date.isoformat(),
             "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
+            "cgst_amount": str(invoice.cgst_amount),
+            "sgst_amount": str(invoice.sgst_amount),
+            "igst_amount": str(invoice.igst_amount),
             "total_before_tax": str(invoice.total_before_tax),
             "tax_amount": str(invoice.tax_amount),
             "discount_amount": str(invoice.discount_amount),
@@ -644,7 +652,7 @@ def bulk_import_invoices():
         for index, row in df.iterrows():
             try:
                 # Start new session for each row to avoid rollback issues
-                from extensions import db as main_db
+                from src.extensions import db as main_db
 
                 items = [{
                     "product_id": int(row['product_id']),

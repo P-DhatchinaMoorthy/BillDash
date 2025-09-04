@@ -1,8 +1,9 @@
 from decimal import Decimal
-from extensions import db
+from src.extensions import db
 from invoices.invoice import Invoice
 from invoices.invoice_item import InvoiceItem
 from products.product import Product
+from category.category import Category
 from stock_transactions.stock_transaction import StockTransaction
 from datetime import datetime
 
@@ -16,15 +17,15 @@ class InvoiceService:
     @staticmethod
     def create_invoice(customer_id, items, payment_terms=None, currency="INR", notes=None, shipping_charges=0, other_charges=0, additional_discount=0, additional_discount_type="percentage", due_date=None):
         """
-        items: list of dicts [{product_id, quantity, tax_rate_per_item(optional)}]
+        items: list of dicts [{product_id, quantity, discount_per_item(optional), discount_type(optional)}]
         This function:
          - creates invoice header
          - creates invoice items (fetches selling_price from Product)
+         - automatically fetches tax rates from product category
          - calculates totals
          - deducts stock and creates stock transactions
         """
         invoice = Invoice(
-            invoice_number="TEMP",  # Temporary, will be updated after getting ID
             customer_id=customer_id,
             payment_terms=payment_terms,
             currency=currency,
@@ -34,13 +35,14 @@ class InvoiceService:
             other_charges=Decimal(str(other_charges)),
         )
         db.session.add(invoice)
-        db.session.flush()  # get invoice.id
-        
-        # Generate proper invoice number with ID
+        db.session.flush()
         invoice.invoice_number = InvoiceService._generate_invoice_number(invoice.id)
 
         total_before_tax = Decimal("0.00")
         total_tax = Decimal("0.00")
+        total_cgst = Decimal("0.00")
+        total_sgst = Decimal("0.00")
+        total_igst = Decimal("0.00")
         total_discount = Decimal("0.00")
 
         for it in items:
@@ -56,9 +58,19 @@ class InvoiceService:
 
             qty = int(it.get("quantity", 1))
             unit_price = Decimal(product.selling_price)
-            tax_rate = Decimal(it.get("tax_rate_per_item", 0))
             discount_per_item = Decimal(it.get("discount_per_item", 0))
             discount_type = it.get("discount_type", "percentage")
+            
+            # Get tax rates from product category
+            category = Category.query.get(product.category_id) if product.category_id else None
+            if category:
+                cgst_rate = Decimal(category.cgst_rate)
+                sgst_rate = Decimal(category.sgst_rate)
+                igst_rate = Decimal(category.igst_rate)
+            else:
+                cgst_rate = sgst_rate = igst_rate = Decimal("0")
+            
+            tax_rate = igst_rate  # Use IGST for calculation
 
             # Calculate line subtotal
             line_subtotal = unit_price * qty
@@ -76,8 +88,11 @@ class InvoiceService:
                 
             line_after_discount = (line_subtotal - discount_amount).quantize(Decimal("0.01"))
             
-            # Calculate tax on discounted amount
-            tax_amount = (line_after_discount * tax_rate / Decimal("100.00")).quantize(Decimal("0.01"))
+            # Calculate tax breakdown on discounted amount
+            cgst_amount = (line_after_discount * cgst_rate / Decimal("100.00")).quantize(Decimal("0.01"))
+            sgst_amount = (line_after_discount * sgst_rate / Decimal("100.00")).quantize(Decimal("0.01"))
+            igst_amount = (line_after_discount * igst_rate / Decimal("100.00")).quantize(Decimal("0.01"))
+            tax_amount = igst_amount  # Only IGST is charged
             line_total = (line_after_discount + tax_amount).quantize(Decimal("0.01"))
 
             invoice_item = InvoiceItem(
@@ -88,6 +103,12 @@ class InvoiceService:
                 discount_per_item=discount_per_item,
                 discount_type=discount_type,
                 tax_rate_per_item=tax_rate,
+                cgst_rate=cgst_rate,
+                sgst_rate=sgst_rate,
+                igst_rate=igst_rate,
+                cgst_amount=cgst_amount,
+                sgst_amount=sgst_amount,
+                igst_amount=igst_amount,
                 total_price=line_total,
             )
             db.session.add(invoice_item)
@@ -95,6 +116,9 @@ class InvoiceService:
             # Update totals
             total_before_tax += line_after_discount
             total_tax += tax_amount
+            total_cgst += cgst_amount
+            total_sgst += sgst_amount
+            total_igst += igst_amount
             total_discount += discount_amount
 
             # Deduct stock and create stock transaction
@@ -131,6 +155,9 @@ class InvoiceService:
         # finalize invoice totals
         invoice.total_before_tax = total_before_tax.quantize(Decimal("0.00"))
         invoice.tax_amount = total_tax.quantize(Decimal("0.00"))
+        invoice.cgst_amount = total_cgst.quantize(Decimal("0.00"))
+        invoice.sgst_amount = total_sgst.quantize(Decimal("0.00"))
+        invoice.igst_amount = total_igst.quantize(Decimal("0.00"))
         invoice.discount_amount = total_discount.quantize(Decimal("0.00"))
         invoice.additional_discount = additional_discount_amount
         invoice.grand_total = grand_total_final

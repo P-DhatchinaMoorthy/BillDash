@@ -12,7 +12,6 @@ from stock_transactions.stock_transaction import StockTransaction
 from sales_no_invoice.sale_no_invoice import SaleNoInvoice
 from purchases.purchase_bill import PurchaseBill
 from returns.product_return import ProductReturn, DamagedProduct
-from user.user import User, Role, Permission, RolePermission, UserPermission, AuditLog
 
 
 __all__ = [
@@ -30,10 +29,4 @@ __all__ = [
     "PurchaseBill",
     "ProductReturn",
     "DamagedProduct",
-    "User",
-    "Role",
-    "Permission",
-    "RolePermission",
-    "UserPermission",
-    "AuditLog",
 ]

@@ -3,10 +3,12 @@ from extensions import db
 from suppliers.supplier import Supplier
 from customers.customer import Customer
 from stock_transactions.stock_transaction import StockTransaction
+from user.auth_bypass import require_permission
 
 bp = Blueprint("suppliers", __name__)
 
 @bp.route("/", methods=["POST"])
+@require_permission('suppliers', 'write')
 def create_supplier():
     data = request.get_json() or {}
     
@@ -61,6 +63,7 @@ def create_supplier():
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/", methods=["GET"])
+@require_permission('suppliers', 'read')
 def list_suppliers():
     search = request.args.get('search', '').strip()
     
@@ -92,6 +95,7 @@ def list_suppliers():
     } for x in sup]), 200
 
 @bp.route("/<int:supplier_id>", methods=["GET"])
+@require_permission('suppliers', 'read')
 def get_supplier(supplier_id):
     s = Supplier.query.get(supplier_id)
     if not s:
@@ -177,6 +181,7 @@ def get_supplier(supplier_id):
     }), 200
 
 @bp.route("/<int:supplier_id>/purchase-history", methods=["GET"])
+@require_permission('suppliers', 'read')
 def get_supplier_purchase_history(supplier_id):
     s = Supplier.query.get(supplier_id)
     if not s:
@@ -276,6 +281,7 @@ def get_supplier_purchase_history(supplier_id):
 
 
 @bp.route("/<int:supplier_id>/payment-history", methods=["GET"])
+@require_permission('suppliers', 'read')
 def get_supplier_payment_history(supplier_id):
     s = Supplier.query.get(supplier_id)
     if not s:
@@ -358,6 +364,7 @@ def get_supplier_payment_history(supplier_id):
 
 
 @bp.route("/purchase-history", methods=["GET"])
+@require_permission('suppliers', 'read')
 def get_all_purchase_history():
     from datetime import datetime
     date_from = request.args.get('date_from')
@@ -448,6 +455,7 @@ def get_all_purchase_history():
     return jsonify({"purchase_history": purchase_history}), 200
 
 @bp.route("/payment-history", methods=["GET"])
+@require_permission('suppliers', 'read')
 def get_all_payment_history():
     from datetime import datetime
     date_from = request.args.get('date_from')
@@ -501,7 +509,13 @@ def get_all_payment_history():
         
         from decimal import Decimal
         total_amt = payment_info.get("total_amount", "0")
-        payment_amt = payment_info.get("payment_amount", "0")
+        payment_amt = payment_info.get("payment_amount", payment_info.get("amount_paid", "0"))
+        
+        # If payment_amount is still 0, calculate from products
+        if payment_amt == "0" and payment_info.get("products"):
+            calculated_total = sum(float(prod.get("amount", 0)) for prod in payment_info.get("products", []))
+            total_amt = str(calculated_total) if total_amt == "0" else total_amt
+        
         balance_due = f"{max(Decimal('0'), Decimal(total_amt) - Decimal(payment_amt)):.2f}"
         
         payment_history.append({
@@ -524,6 +538,7 @@ def get_all_payment_history():
     return jsonify({"payment_history": payment_history}), 200
 
 @bp.route("/<int:supplier_id>", methods=["PUT"])
+@require_permission('suppliers', 'write')
 def update_supplier(supplier_id):
     s = Supplier.query.get(supplier_id)
     if not s:

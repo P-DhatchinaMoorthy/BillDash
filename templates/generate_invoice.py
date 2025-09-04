@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# generate_invoice.py
 import os
 import sys
 import json
@@ -37,7 +35,7 @@ def generate_invoice_pdf(invoice_id):
         invoice_data = fetch_invoice_data(invoice_id)
         
         # Setup Jinja2 environment
-        env = Environment(loader=FileSystemLoader('.'))
+        env = Environment(loader=FileSystemLoader('templates'))
         template = env.get_template('invoice_template.html')
         
         # Add current timestamp
@@ -69,7 +67,8 @@ def generate_invoice_pdf(invoice_id):
             'margin-left': '0.5in',
             'encoding': "UTF-8",
             'no-outline': None,
-            'enable-local-file-access': None
+            'enable-local-file-access': None,
+            'load-error-handling': 'ignore'
         }
         
         # Try to generate PDF

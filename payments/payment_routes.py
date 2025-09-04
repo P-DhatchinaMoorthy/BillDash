@@ -1,11 +1,13 @@
 from flask import Blueprint, request, jsonify
 from decimal import Decimal
-from extensions import db
+from src.extensions import db
 from payments.payment_service import PaymentService
+from user.auth_bypass import require_permission
 
 bp = Blueprint("payments", __name__)
 
 @bp.route("/direct-sale", methods=["POST"])
+@require_permission('payments', 'write')
 def direct_sale():
     from sales.direct_sales_service import DirectSalesService
     payload = request.get_json() or {}
@@ -36,6 +38,7 @@ def direct_sale():
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/", methods=["POST"])
+@require_permission('payments', 'write')
 def create_payment():
     payload = request.get_json() or {}
     invoice_id = payload.get("invoice_id")
@@ -60,6 +63,7 @@ def create_payment():
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/", methods=["GET"])
+@require_permission('payments', 'read')
 def list_payments():
     from payments.payment import Payment
     from decimal import Decimal
@@ -93,6 +97,7 @@ def list_payments():
     return jsonify(result), 200
 
 @bp.route("/<payment_id>", methods=["GET"])
+@require_permission('payments', 'read')
 def get_payment(payment_id):
     from payments.payment import Payment
     from customers.customer import Customer
@@ -145,6 +150,7 @@ def get_payment(payment_id):
     }), 200
 
 @bp.route("/<payment_id>", methods=["PUT"])
+@require_permission('payments', 'write')
 def update_payment(payment_id):
     from payments.payment import Payment
     payment = Payment.query.get(payment_id)
@@ -183,6 +189,7 @@ def update_payment(payment_id):
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/<int:invoice_id>", methods=["POST"])
+@require_permission('payments', 'write')
 def process_payment_by_invoice(invoice_id):
     from payments.payment import Payment
     from invoices.invoice import Invoice
@@ -228,6 +235,7 @@ def process_payment_by_invoice(invoice_id):
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/invoice/<invoice_id>/details", methods=["GET"])
+@require_permission('payments', 'read')
 def get_detailed_invoice(invoice_id):
     try:
         invoice_details = PaymentService.get_detailed_invoice(invoice_id)
@@ -261,6 +269,7 @@ def get_invoice_html(invoice_id):
         return f"Error: {str(e)}", 400
 
 @bp.route("/outstanding", methods=["GET"])
+@require_permission('payments', 'read')
 def get_outstanding_payments():
     """Get all outstanding payments with filters"""
     from payments.payment import Payment
@@ -397,6 +406,7 @@ def get_customer_wise_outstanding():
     }), 200
 
 @bp.route("/records", methods=["GET"])
+@require_permission('payments', 'read')
 def get_payment_records():
     """Enhanced payment records with filtering"""
     from payments.payment import Payment
@@ -533,6 +543,7 @@ def generate_receipt(payment_id):
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/summary", methods=["GET"])
+@require_permission('payments', 'read')
 def get_payment_summary():
     """Get payment summary statistics"""
     try:
@@ -540,3 +551,104 @@ def get_payment_summary():
         return jsonify(summary), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+@bp.route("/customer-outstanding/", methods=["GET"])
+@require_permission('payments', 'read')
+def get_customer_outstanding_payments():
+    try:
+        from customers.customer import Customer
+        from invoices.invoice import Invoice
+        from payments.payment import Payment
+        
+        customer_id = request.args.get('customer_id')
+        if customer_id:
+            customers = Customer.query.filter_by(id=customer_id).all()
+        else:
+            customers = Customer.query.all()
+        outstanding_data = []
+        total_outstanding = 0
+        
+        for customer in customers:
+            customer_invoices = Invoice.query.filter_by(customer_id=customer.id).all()
+            customer_outstanding = 0
+            invoice_details = []
+            
+            for invoice in customer_invoices:
+                payments = Payment.query.filter_by(invoice_id=invoice.id).all()
+                paid_amount = sum([float(p.amount_paid) for p in payments])
+                pending = float(invoice.grand_total) - paid_amount
+                if pending > 0:
+                    customer_outstanding += pending
+                    payment_id = payments[0].id if payments else None
+                    invoice_details.append({
+                        "invoice_id": invoice.id,
+                        "payment_id": payment_id,
+                        "pending_amount": f"{pending:.2f}"
+                    })
+            
+            if customer_outstanding > 0:
+                status = "Overdue" if customer_outstanding > 0 else "Paid"
+                outstanding_data.append({
+                    "customer_id": customer.id,
+                    "customer_name": customer.contact_person,
+                    "outstanding_amount": f"{customer_outstanding:.2f}",
+                    "status": status,
+                    "invoices": invoice_details
+                })
+                total_outstanding += customer_outstanding
+        
+        return jsonify({
+            "report_name": "Customer-wise Outstanding",
+            "total_outstanding": f"{total_outstanding:.2f}",
+            "customers": outstanding_data
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/payment-reminders/", methods=["GET"])
+@require_permission('payments', 'read')
+def get_payment_reminders_payments():
+    try:
+        from datetime import datetime
+        from invoices.invoice import Invoice
+        from payments.payment import Payment
+        
+        overdue_invoices = []
+        
+        invoice_id = request.args.get('invoice_id')
+        customer_id = request.args.get('customer_id')
+        
+        if invoice_id:
+            invoices = Invoice.query.filter_by(id=invoice_id).all()
+        elif customer_id:
+            invoices = Invoice.query.filter_by(customer_id=customer_id).all()
+        else:
+            invoices = Invoice.query.all()
+        for invoice in invoices:
+            payments = Payment.query.filter_by(invoice_id=invoice.id).all()
+            paid_amount = sum([float(p.amount_paid) for p in payments])
+            pending_amount = float(invoice.grand_total) - paid_amount
+            
+            if pending_amount > 0:
+                invoice_date = invoice.invoice_date.date() if hasattr(invoice.invoice_date, 'date') else invoice.invoice_date
+                days_overdue = (datetime.now().date() - invoice_date).days
+                payment_id = payments[0].id if payments else None
+                overdue_invoices.append({
+                    "invoice_id": invoice.id,
+                    "payment_id": payment_id,
+                    "customer_id": invoice.customer_id,
+                    "invoice_number": invoice.invoice_number,
+                    "customer_name": invoice.customer.contact_person if invoice.customer else "Unknown",
+                    "total_amount": f"{float(invoice.grand_total):.2f}",
+                    "paid_amount": f"{paid_amount:.2f}",
+                    "pending_amount": f"{pending_amount:.2f}",
+                    "days_overdue": days_overdue,
+                    "invoice_date": invoice.invoice_date.strftime("%Y-%m-%d")
+                })
+        
+        return jsonify({
+            "report_name": "Payment Reminders",
+            "overdue_invoices": overdue_invoices,
+            "total_overdue": len(overdue_invoices)
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

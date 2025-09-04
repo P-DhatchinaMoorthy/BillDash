@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from extensions import db
+from src.extensions import db
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy import event
 

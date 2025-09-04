@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify
-from extensions import db
+from src.extensions import db
 from products.product import Product
 from products.product_service import ProductService
+from user.auth_bypass import require_permission
 import csv
 import io
 import pandas as pd
@@ -13,6 +14,7 @@ bp = Blueprint("products", __name__)
 # Create single or multiple products
 # -------------------------
 @bp.route("/", methods=["POST"])
+@require_permission('products', 'write')
 def create_product():
     data = request.get_json() or {}
 
@@ -98,6 +100,7 @@ def create_product():
 # Get low stock alerts (products with stock <= 100)
 # -------------------------
 @bp.route("/low-stock", methods=["GET"])
+@require_permission('products', 'read')
 def get_low_stock_alerts():
     products = Product.query.filter(Product.quantity_in_stock <= 100).order_by(Product.id.asc()).all()
     result = []
@@ -106,7 +109,7 @@ def get_low_stock_alerts():
             "id": p.id,
             "product_name": p.product_name,
             "category_id": p.category_id,
-            "category_name": p.category.name if p.category else None,
+            "category_name": None,
             "quantity_in_stock": p.quantity_in_stock,
             "supplier_id": p.supplier_id,
             "sku": p.sku,
@@ -121,6 +124,7 @@ def get_low_stock_alerts():
 # List all products with optional filters
 # -------------------------
 @bp.route("/", methods=["GET"])
+@require_permission('products', 'read')
 def list_products():
     query = Product.query
 
@@ -141,7 +145,7 @@ def list_products():
             "description": p.description,
             "sku": p.sku,
             "category_id": p.category_id,
-            "category_name": p.category.name if p.category else None,
+            "category_name": None,
             "subcategory_id": p.subcategory_id,
             "unit_of_measure": p.unit_of_measure,
             "selling_price": str(p.selling_price),
@@ -163,6 +167,7 @@ def list_products():
 # Get single product by ID
 # -------------------------
 @bp.route("/<int:product_id>", methods=["GET"])
+@require_permission('products', 'read')
 def get_product(product_id):
     p = Product.query.get(product_id)
     if not p:
@@ -174,7 +179,7 @@ def get_product(product_id):
         "description": p.description,
         "sku": p.sku,
         "category_id": p.category_id,
-        "category_name": p.category.name if p.category else None,
+        "category_name": None,
         "subcategory_id": p.subcategory_id,
         "unit_of_measure": p.unit_of_measure,
         "selling_price": str(p.selling_price),
@@ -195,6 +200,7 @@ def get_product(product_id):
 # Update a product by ID
 # -------------------------
 @bp.route("/<int:product_id>", methods=["PUT"])
+@require_permission('products', 'write')
 def update_product(product_id):
     p = Product.query.get(product_id)
     if not p:
@@ -230,6 +236,7 @@ def update_product(product_id):
 # Bulk upload products via CSV or XLSX
 # -------------------------
 @bp.route("/bulk", methods=["POST"])
+@require_permission('products', 'write')
 def bulk_upload():
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -275,14 +282,20 @@ def bulk_upload():
             
             # Check if category exists, set to null if not found
             if category_id:
-                from category.category import Category
-                if not Category.query.get(category_id):
+                try:
+                    from category.category import Category
+                    if not Category.query.get(category_id):
+                        category_id = None
+                except ImportError:
                     category_id = None
             
             # Check if supplier exists, set to null if not found
             if supplier_id:
-                from suppliers.supplier import Supplier
-                if not Supplier.query.get(supplier_id):
+                try:
+                    from suppliers.supplier import Supplier
+                    if not Supplier.query.get(supplier_id):
+                        supplier_id = None
+                except ImportError:
                     supplier_id = None
             
             data = {

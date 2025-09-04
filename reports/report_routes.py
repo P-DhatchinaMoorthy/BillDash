@@ -1,19 +1,20 @@
 from flask import Blueprint, request, jsonify
-import json
-import os
 from datetime import datetime, date
-from extensions import db
+from src.extensions import db
 from reports.report import Report
 from reports.report_service import ReportService
 from products.product import Product
 from invoices.invoice import Invoice
 from customers.customer import Customer
 from payments.payment import Payment
+from sales_no_invoice.sale_no_invoice import SaleNoInvoice
+from user.auth_bypass import require_permission
 from sqlalchemy import func, desc
 
 bp = Blueprint("reports", __name__)
 
 @bp.route("/sales", methods=["GET"])
+@require_permission('reports', 'read')
 def get_sales_report():
     try:
         report_data = ReportService.generate_sales_report()
@@ -22,6 +23,7 @@ def get_sales_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/stock", methods=["GET"])
+@require_permission('reports', 'read')
 def get_stock_report():
     try:
         report_data = ReportService.generate_stock_report()
@@ -30,6 +32,7 @@ def get_stock_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/profit-loss", methods=["GET"])
+@require_permission('reports', 'read')
 def get_profit_loss_report():
     try:
         report_data = ReportService.generate_profit_loss_report()
@@ -58,6 +61,7 @@ def get_dashboard_test():
 
 
 @bp.route("/dashboard", methods=["GET"])
+@require_permission('reports', 'read')
 def get_dashboard_report():
     products_count = Product.query.count()
     customers_count = Customer.query.count()
@@ -110,17 +114,16 @@ def get_dashboard_report():
     }), 200
 
 @bp.route("/", methods=["GET"])
+@require_permission('reports', 'read')
 def list_reports():
     try:
-        from models.product import Product
         total_products = Product.query.count()
     except:
         total_products = 0
     
     try:
-        from models.sale_no_invoice import SaleNoInvoice
         sales = SaleNoInvoice.query.all()
-        total_sales = sum([s.total_amount for s in sales if hasattr(s, 'total_amount')])
+        total_sales = sum([float(s.total_amount) for s in sales if hasattr(s, 'total_amount')])
     except:
         total_sales = 0
     
@@ -146,7 +149,6 @@ def list_reports():
 @bp.route("/sales-no-invoice", methods=["GET"])
 def get_sales_no_invoice_report():
     try:
-        from models.sale_no_invoice import SaleNoInvoice
         sales = SaleNoInvoice.query.all()
         
         sales_data = []
@@ -503,6 +505,7 @@ def debug_locations():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/generate", methods=["POST"])
+@require_permission('reports', 'write')
 def generate_report():
     data = request.get_json() or {}
     report_type = data.get("report_type")

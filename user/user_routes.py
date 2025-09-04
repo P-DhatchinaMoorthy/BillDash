@@ -1,215 +1,276 @@
-from flask import Blueprint, request, jsonify
-from flask_login import login_user, logout_user, login_required, current_user
-from .user import User, Role, Permission, RolePermission, UserPermission, AuditLog
-from .permission_service import require_permission, PermissionService
+from flask import Blueprint, request, jsonify, session
+from user.user import User, Permission, UserPermission, AuditLog
 from src.extensions import db
+from functools import wraps
 
-user_bp = Blueprint('user', __name__, url_prefix='/api/users')
+def require_permission(module, action):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            user_id = session.get('user_id')
+            if not user_id:
+                return jsonify({'error': 'Login required'}), 401
+            
+            user = User.query.get(user_id)
+            if not user:
+                return jsonify({'error': 'User not found'}), 401
+            
+            # Admin bypasses all permission checks
+            if user.role == 'admin':
+                return f(*args, **kwargs)
+            
+            # For admin module, only admin role is allowed
+            if module == 'admin':
+                return jsonify({'error': 'Access denied'}), 403
+            
+            permission = Permission.query.filter_by(module_name=module).first()
+            if not permission:
+                return jsonify({'error': 'Access denied'}), 403
+            
+            user_perm = UserPermission.query.filter_by(
+                user_id=user_id, permission_id=permission.id
+            ).first()
+            
+            if not user_perm:
+                return jsonify({'error': 'Access denied'}), 403
+            
+            allowed = {
+                'read': user_perm.can_read,
+                'write': user_perm.can_write,
+                'delete': user_perm.can_delete
+            }.get(action, False)
+            
+            if not allowed:
+                return jsonify({'error': 'Access denied'}), 403
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
-@user_bp.route('/login', methods=['POST'])
+bp = Blueprint('user', __name__)
+
+@bp.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    username = data.get('username')
+    from flask import session
+    data = request.get_json() or {}
+    username = data.get('username') or data.get('user_id')  # Support both
     password = data.get('password')
     
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    
     user = User.query.filter_by(username=username).first()
-    
-    if user and user.check_password(password) and user.is_active:
-        login_user(user)
-        PermissionService.log_action(user.id, 'LOGIN', 'AUTH')
+    if user and user.check_password(password):  # Use proper password checking
+        # Set session
+        session['user_id'] = user.id
+        session['username'] = user.username
+        session['role'] = user.role
+        session.permanent = True
+        
         return jsonify({
-            'message': 'Login successful',
+            'success': True,
             'user': {
-                'id': user.id,
+                'user_id': user.id,
                 'username': user.username,
-                'role': user.role.name
+                'role': user.role
             }
-        })
+        }), 200
     
-    PermissionService.log_action(
-        user.id if user else None, 'LOGIN_FAILED', 'AUTH',
-        success=False, error_message='Invalid credentials'
-    )
     return jsonify({'error': 'Invalid credentials'}), 401
 
-@user_bp.route('/logout', methods=['POST'])
-@login_required
+@bp.route('/logout', methods=['POST'])
 def logout():
-    PermissionService.log_action(current_user.id, 'LOGOUT', 'AUTH')
-    logout_user()
-    return jsonify({'message': 'Logout successful'})
+    from flask import session
+    session.clear()
+    return jsonify({'success': True, 'message': 'Logged out successfully'})
 
-@user_bp.route('/', methods=['GET'])
-@require_permission('users.read')
-def get_users():
-    users = User.query.all()
-    return jsonify([{
-        'id': user.id,
-        'username': user.username,
-        'email': user.email,
-        'role': user.role.name,
-        'is_active': user.is_active,
-        'created_at': user.created_at.isoformat()
-    } for user in users])
 
-@user_bp.route('/', methods=['POST'])
-@require_permission('users.create')
-def create_user():
-    data = request.get_json()
+
+@bp.route('/admin/user-permissions/<int:user_id>', methods=['GET'])
+@require_permission('admin', 'read')
+def get_user_permissions(user_id):
+    # Get user details
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
     
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'error': 'Username already exists'}), 400
+    # Get user permissions
+    permissions = db.session.query(
+        Permission.module_name,
+        UserPermission.can_read,
+        UserPermission.can_write,
+        UserPermission.can_delete,
+    ).join(UserPermission).filter(
+        UserPermission.user_id == user_id
+    ).all()
     
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'Email already exists'}), 400
-    
-    role = Role.query.get(data['role_id'])
-    if not role:
-        return jsonify({'error': 'Invalid role'}), 400
-    
-    user = User(
-        username=data['username'],
-        email=data['email'],
-        role_id=data['role_id']
-    )
-    user.set_password(data['password'])
-    
-    db.session.add(user)
-    db.session.commit()
-    
-    PermissionService.log_action(current_user.id, 'CREATE', 'USER', user.id)
+    permission_list = [{
+        'module_name': p.module_name,
+        'can_read': p.can_read,
+        'can_write': p.can_write,
+        'can_delete': p.can_delete
+    } for p in permissions]
     
     return jsonify({
-        'message': 'User created successfully',
-        'user_id': user.id
-    }), 201
+        'user': {
+            'user_id': user.id,
+            'username': user.username,
+            'email': getattr(user, 'email', None),
+            'role': user.role,
+            'created_at': user.created_at.isoformat(),
+            'updated_at': user.updated_at.isoformat() if user.updated_at else None
+        },
+        'permissions': permission_list
+    }), 200
 
-@user_bp.route('/<int:user_id>', methods=['PUT'])
-@require_permission('users.update')
-def update_user(user_id):
-    user = User.query.get_or_404(user_id)
-    data = request.get_json()
-    
-    if 'username' in data and data['username'] != user.username:
-        if User.query.filter_by(username=data['username']).first():
-            return jsonify({'error': 'Username already exists'}), 400
-        user.username = data['username']
-    
-    if 'email' in data and data['email'] != user.email:
-        if User.query.filter_by(email=data['email']).first():
-            return jsonify({'error': 'Email already exists'}), 400
-        user.email = data['email']
-    
-    if 'role_id' in data:
-        role = Role.query.get(data['role_id'])
-        if not role:
-            return jsonify({'error': 'Invalid role'}), 400
-        user.role_id = data['role_id']
-    
-    if 'is_active' in data:
-        user.is_active = data['is_active']
-    
-    if 'password' in data:
-        user.set_password(data['password'])
-    
-    db.session.commit()
-    
-    PermissionService.log_action(current_user.id, 'UPDATE', 'USER', user.id)
-    
-    return jsonify({'message': 'User updated successfully'})
-
-@user_bp.route('/<int:user_id>', methods=['DELETE'])
-@require_permission('users.delete')
-def delete_user(user_id):
-    user = User.query.get_or_404(user_id)
-    
-    if user.id == current_user.id:
-        return jsonify({'error': 'Cannot delete your own account'}), 400
-    
-    db.session.delete(user)
-    db.session.commit()
-    
-    PermissionService.log_action(current_user.id, 'DELETE', 'USER', user_id)
-    
-    return jsonify({'message': 'User deleted successfully'})
-
-@user_bp.route('/roles', methods=['GET'])
-@require_permission('users.read')
-def get_roles():
-    roles = Role.query.all()
-    return jsonify([{
-        'id': role.id,
-        'name': role.name,
-        'description': role.description
-    } for role in roles])
-
-@user_bp.route('/permissions/<int:user_id>', methods=['GET'])
-@require_permission('users.read')
-def get_user_permissions(user_id):
-    user = User.query.get_or_404(user_id)
-    permissions = UserPermission.query.filter_by(user_id=user_id).all()
-    
-    return jsonify([{
-        'permission_name': perm.permission_name,
-        'granted': perm.granted,
-        'created_at': perm.created_at.isoformat()
-    } for perm in permissions])
-
-@user_bp.route('/permissions/<int:user_id>', methods=['POST'])
-@require_permission('users.update')
-def grant_user_permission(user_id):
-    user = User.query.get_or_404(user_id)
-    data = request.get_json()
-    
-    permission = UserPermission.query.filter_by(
-        user_id=user_id,
-        permission_name=data['permission_name']
-    ).first()
-    
-    if permission:
-        permission.granted = data['granted']
-    else:
-        permission = UserPermission(
-            user_id=user_id,
-            permission_name=data['permission_name'],
-            granted=data['granted'],
-            granted_by=current_user.id
-        )
-        db.session.add(permission)
-    
-    db.session.commit()
-    
-    PermissionService.log_action(
-        current_user.id, 'GRANT_PERMISSION', 'USER_PERMISSION',
-        f"{user_id}:{data['permission_name']}"
-    )
-    
-    return jsonify({'message': 'Permission updated successfully'})
-
-@user_bp.route('/audit', methods=['GET'])
-@require_permission('audit.read')
+@bp.route('/admin/audit-logs', methods=['GET'])
 def get_audit_logs():
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 50, type=int)
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 50))
     
     logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
     
+    result = [{
+        'id': log.id,
+        'user_id': log.user_id,
+        'action': log.action,
+        'module_name': log.module_name,
+        'record_id': log.record_id,
+        'ip_address': log.ip_address,
+        'timestamp': log.timestamp.isoformat()
+    } for log in logs.items]
+    
     return jsonify({
-        'logs': [{
-            'id': log.id,
-            'user_id': log.user_id,
-            'username': log.user.username if log.user else 'Unknown',
-            'action': log.action,
-            'resource': log.resource,
-            'resource_id': log.resource_id,
-            'ip_address': log.ip_address,
-            'success': log.success,
-            'error_message': log.error_message,
-            'timestamp': log.timestamp.isoformat()
-        } for log in logs.items],
-        'total': logs.total,
-        'pages': logs.pages,
-        'current_page': page
-    })
+        'logs': result,
+        'pagination': {
+            'page': logs.page,
+            'per_page': logs.per_page,
+            'total': logs.total,
+            'pages': logs.pages
+        }
+    }), 200
+
+@bp.route('/admin/user-permissions/<int:user_id>', methods=['PUT'])
+@require_permission('admin', 'write')
+def update_user_permissions(user_id):
+    data = request.get_json() or {}
+    permissions = data.get('permissions', {})
+    
+    if not permissions:
+        return jsonify({'error': 'permissions required'}), 400
+    
+    try:
+        for module, perms in permissions.items():
+            permission = Permission.query.filter_by(module_name=module).first()
+            if not permission:
+                continue
+            
+            user_perm = UserPermission.query.filter_by(
+                user_id=user_id, permission_id=permission.id
+            ).first()
+            
+            if not user_perm:
+                user_perm = UserPermission(
+                    user_id=user_id,
+                    permission_id=permission.id
+                )
+                db.session.add(user_perm)
+            
+            user_perm.can_read = perms.get('read', False)
+            user_perm.can_write = perms.get('write', False)
+            user_perm.can_delete = perms.get('delete', False)
+            user_perm.granted_by = session.get('user_id')
+        
+        db.session.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/admin/create_user', methods=['POST'])
+@require_permission('admin', 'write')
+def create_user():
+    data = request.get_json() or {}
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    role = data.get('role')
+    permissions = data.get('permissions', {})
+    
+    # Validate required fields
+    if not username or not password or not role:
+        return jsonify({'error': 'username, password and role are required'}), 400
+    
+    # Validate role
+    valid_roles = ['admin', 'manager', 'sales', 'accountant', 'stock_manager']
+    if role not in valid_roles:
+        return jsonify({'error': f'Invalid role. Must be one of: {valid_roles}'}), 400
+    
+    # Validate username format
+    if len(username) < 3:
+        return jsonify({'error': 'Username must be at least 3 characters long'}), 400
+    
+    # Validate password strength
+    if len(password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters long'}), 400
+    
+    # Check if username already exists
+    existing_user = User.query.filter_by(username=username).first()
+    if existing_user:
+        return jsonify({'error': f'Username "{username}" already exists'}), 400
+    
+    # Check if email already exists (if provided)
+    if email:
+        existing_email = User.query.filter_by(email=email).first()
+        if existing_email:
+            return jsonify({'error': f'Email "{email}" already exists'}), 400
+    
+    try:
+        # Create user
+        user = User(
+            username=username,
+            email=email,
+            password=password,
+            role=role
+        )
+        db.session.add(user)
+        db.session.flush()
+        
+        # Set permissions if provided
+        for module, perms in permissions.items():
+            if not isinstance(perms, dict):
+                continue
+                
+            permission = Permission.query.filter_by(module_name=module).first()
+            if not permission:
+                permission = Permission(module_name=module)
+                db.session.add(permission)
+                db.session.flush()
+            
+            user_perm = UserPermission(
+                user_id=user.id,
+                permission_id=permission.id,
+                can_read=bool(perms.get('read', False)),
+                can_write=bool(perms.get('write', False)),
+                can_delete=bool(perms.get('delete', False)),
+                granted_by=session.get('user_id')
+            )
+            db.session.add(user_perm)
+        
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': 'User created successfully',
+            'user': {
+                'user_id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': user.role
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to create user: {str(e)}'}), 500
