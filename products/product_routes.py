@@ -14,7 +14,6 @@ bp = Blueprint("products", __name__)
 # Create single or multiple products
 # -------------------------
 @bp.route("/", methods=["POST"])
-@require_permission('products', 'write')
 def create_product():
     data = request.get_json() or {}
 
@@ -100,7 +99,6 @@ def create_product():
 # Get low stock alerts (products with stock <= 100)
 # -------------------------
 @bp.route("/low-stock", methods=["GET"])
-@require_permission('products', 'read')
 def get_low_stock_alerts():
     products = Product.query.filter(Product.quantity_in_stock <= 100).order_by(Product.id.asc()).all()
     result = []
@@ -124,7 +122,6 @@ def get_low_stock_alerts():
 # List all products with optional filters
 # -------------------------
 @bp.route("/", methods=["GET"])
-@require_permission('products', 'read')
 def list_products():
     query = Product.query
 
@@ -167,7 +164,6 @@ def list_products():
 # Get single product by ID
 # -------------------------
 @bp.route("/<int:product_id>", methods=["GET"])
-@require_permission('products', 'read')
 def get_product(product_id):
     p = Product.query.get(product_id)
     if not p:
@@ -200,7 +196,6 @@ def get_product(product_id):
 # Update a product by ID
 # -------------------------
 @bp.route("/<int:product_id>", methods=["PUT"])
-@require_permission('products', 'write')
 def update_product(product_id):
     p = Product.query.get(product_id)
     if not p:
@@ -236,7 +231,6 @@ def update_product(product_id):
 # Bulk upload products via CSV or XLSX
 # -------------------------
 @bp.route("/bulk", methods=["POST"])
-@require_permission('products', 'write')
 def bulk_upload():
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400

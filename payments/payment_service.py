@@ -208,6 +208,18 @@ class PaymentService:
         except:
             company_settings = None
         
+        # Encode logo to base64 for web view
+        import base64
+        import os
+        logo_base64 = ''
+        try:
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'addons', 'DMlogo.jpg')
+            if os.path.exists(logo_path):
+                with open(logo_path, 'rb') as logo_file:
+                    logo_base64 = base64.b64encode(logo_file.read()).decode('utf-8')
+        except Exception as e:
+            print(f"Logo encoding error: {e}")
+        
         # Calculate totals
         total_paid = sum([Decimal(p.amount_paid) for p in payments])
         total_discount = sum([Decimal(p.discount_amount) for p in payments])
@@ -243,6 +255,7 @@ class PaymentService:
                 "alternate_phone": customer.alternate_phone,
                 "billing_address": customer.billing_address,
                 "shipping_address": customer.shipping_address,
+                "branch": customer.branch,
                 "gst_number": customer.gst_number,
                 "pan_number": customer.pan_number,
                 "payment_terms": customer.payment_terms,
@@ -315,17 +328,18 @@ class PaymentService:
             },
             "amount_in_words": PaymentService._number_to_words(invoice.grand_total),
             "company_settings": {
-                "company_name": company_settings.business_name if company_settings else None,
-                "company_gstin": company_settings.gst_number if company_settings else None,
-                "company_address": company_settings.registered_address if company_settings else None,
-                "company_city": company_settings.city if company_settings else None,
-                "company_state": company_settings.state if company_settings else None,
-                "company_pincode": company_settings.postal_code if company_settings else None,
-                "company_phone": company_settings.primary_phone if company_settings else None,
-                "company_email": company_settings.primary_email if company_settings else None,
-                "company_pan": company_settings.pan_number if company_settings else None,
-                "company_website": company_settings.website if company_settings else None
-            }
+                "business_name": company_settings.business_name if company_settings else "Your Company",
+                "tagline": company_settings.tagline if company_settings else "Excellence in Every Transaction",
+                "primary_phone": company_settings.primary_phone if company_settings else "+91-XXXXXXXXXX",
+                "secondary_phone": company_settings.secondary_phone if company_settings else "N/A",
+                "primary_email": company_settings.primary_email if company_settings else "info@company.com",
+                "website": company_settings.website if company_settings else "www.company.com",
+                "gst_number": company_settings.gst_number if company_settings else "GSTIN-XXXXXXXXX",
+                "registered_address": company_settings.registered_address if company_settings else "Address not available",
+                "state": company_settings.state if company_settings else "State",
+                "postal_code": company_settings.postal_code if company_settings else "000000"
+            },
+            "logo_base64": logo_base64
         }
     
     @staticmethod

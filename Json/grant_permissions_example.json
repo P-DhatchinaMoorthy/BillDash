@@ -1,9 +1,0 @@
-{
-  "user_id": 2,
-  "module": "customers",
-  "permissions": {
-    "read": true,
-    "write": true,
-    "delete": false
-  }
-}

@@ -1,7 +1,10 @@
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, g
 from user.user import User, Permission, UserPermission, AuditLog
 from src.extensions import db
 from functools import wraps
+from user.jwt_utils import generate_jwt_token
+from user.jwt_middleware import jwt_required, get_current_user
+from user.audit_logger import log_user_action, audit_decorator
 
 def require_permission(module, action):
     def decorator(f):
@@ -51,24 +54,31 @@ bp = Blueprint('user', __name__)
 
 @bp.route('/login', methods=['POST'])
 def login():
-    from flask import session
     data = request.get_json() or {}
-    username = data.get('username') or data.get('user_id')  # Support both
+    username = data.get('username') or data.get('user_id')
     password = data.get('password')
     
     if not username or not password:
         return jsonify({'error': 'Username and password required'}), 400
     
     user = User.query.filter_by(username=username).first()
-    if user and user.check_password(password):  # Use proper password checking
-        # Set session
-        session['user_id'] = user.id
-        session['username'] = user.username
-        session['role'] = user.role
-        session.permanent = True
+    if user and user.check_password(password):
+        # Generate JWT token
+        token = generate_jwt_token(user)
+        
+        # Set user in g for audit logging
+        g.current_user = {
+            'user_id': user.id,
+            'username': user.username,
+            'role': user.role
+        }
+        
+        # Log login action
+        log_user_action('LOGIN', 'auth', user.id)
         
         return jsonify({
             'success': True,
+            'token': token,
             'user': {
                 'user_id': user.id,
                 'username': user.username,
@@ -87,7 +97,7 @@ def logout():
 
 
 @bp.route('/admin/user-permissions/<int:user_id>', methods=['GET'])
-@require_permission('admin', 'read')
+@jwt_required
 def get_user_permissions(user_id):
     # Get user details
     user = User.query.get(user_id)
@@ -124,6 +134,7 @@ def get_user_permissions(user_id):
     }), 200
 
 @bp.route('/admin/audit-logs', methods=['GET'])
+@jwt_required
 def get_audit_logs():
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 50))
@@ -153,7 +164,8 @@ def get_audit_logs():
     }), 200
 
 @bp.route('/admin/user-permissions/<int:user_id>', methods=['PUT'])
-@require_permission('admin', 'write')
+@jwt_required
+@audit_decorator('user_permissions', 'UPDATE')
 def update_user_permissions(user_id):
     data = request.get_json() or {}
     permissions = data.get('permissions', {})
@@ -181,7 +193,7 @@ def update_user_permissions(user_id):
             user_perm.can_read = perms.get('read', False)
             user_perm.can_write = perms.get('write', False)
             user_perm.can_delete = perms.get('delete', False)
-            user_perm.granted_by = session.get('user_id')
+            user_perm.granted_by = get_current_user()['user_id']
         
         db.session.commit()
         return jsonify({'success': True}), 200
@@ -190,7 +202,8 @@ def update_user_permissions(user_id):
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/admin/create_user', methods=['POST'])
-@require_permission('admin', 'write')
+@jwt_required
+@audit_decorator('users', 'CREATE')
 def create_user():
     data = request.get_json() or {}
     username = data.get('username')
@@ -255,7 +268,7 @@ def create_user():
                 can_read=bool(perms.get('read', False)),
                 can_write=bool(perms.get('write', False)),
                 can_delete=bool(perms.get('delete', False)),
-                granted_by=session.get('user_id')
+                granted_by=get_current_user()['user_id']
             )
             db.session.add(user_perm)
         

@@ -7,7 +7,6 @@ from user.auth_bypass import require_permission
 bp = Blueprint("payments", __name__)
 
 @bp.route("/direct-sale", methods=["POST"])
-@require_permission('payments', 'write')
 def direct_sale():
     from sales.direct_sales_service import DirectSalesService
     payload = request.get_json() or {}
@@ -38,7 +37,6 @@ def direct_sale():
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/", methods=["POST"])
-@require_permission('payments', 'write')
 def create_payment():
     payload = request.get_json() or {}
     invoice_id = payload.get("invoice_id")
@@ -63,7 +61,6 @@ def create_payment():
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/", methods=["GET"])
-@require_permission('payments', 'read')
 def list_payments():
     from payments.payment import Payment
     from decimal import Decimal
@@ -97,7 +94,6 @@ def list_payments():
     return jsonify(result), 200
 
 @bp.route("/<payment_id>", methods=["GET"])
-@require_permission('payments', 'read')
 def get_payment(payment_id):
     from payments.payment import Payment
     from customers.customer import Customer
@@ -150,7 +146,6 @@ def get_payment(payment_id):
     }), 200
 
 @bp.route("/<payment_id>", methods=["PUT"])
-@require_permission('payments', 'write')
 def update_payment(payment_id):
     from payments.payment import Payment
     payment = Payment.query.get(payment_id)
@@ -189,7 +184,6 @@ def update_payment(payment_id):
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/<int:invoice_id>", methods=["POST"])
-@require_permission('payments', 'write')
 def process_payment_by_invoice(invoice_id):
     from payments.payment import Payment
     from invoices.invoice import Invoice
@@ -235,7 +229,6 @@ def process_payment_by_invoice(invoice_id):
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/invoice/<invoice_id>/details", methods=["GET"])
-@require_permission('payments', 'read')
 def get_detailed_invoice(invoice_id):
     try:
         invoice_details = PaymentService.get_detailed_invoice(invoice_id)
@@ -269,7 +262,6 @@ def get_invoice_html(invoice_id):
         return f"Error: {str(e)}", 400
 
 @bp.route("/outstanding", methods=["GET"])
-@require_permission('payments', 'read')
 def get_outstanding_payments():
     """Get all outstanding payments with filters"""
     from payments.payment import Payment
@@ -406,7 +398,6 @@ def get_customer_wise_outstanding():
     }), 200
 
 @bp.route("/records", methods=["GET"])
-@require_permission('payments', 'read')
 def get_payment_records():
     """Enhanced payment records with filtering"""
     from payments.payment import Payment
@@ -543,7 +534,6 @@ def generate_receipt(payment_id):
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/summary", methods=["GET"])
-@require_permission('payments', 'read')
 def get_payment_summary():
     """Get payment summary statistics"""
     try:
@@ -552,7 +542,6 @@ def get_payment_summary():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 @bp.route("/customer-outstanding/", methods=["GET"])
-@require_permission('payments', 'read')
 def get_customer_outstanding_payments():
     try:
         from customers.customer import Customer
@@ -605,7 +594,6 @@ def get_customer_outstanding_payments():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/payment-reminders/", methods=["GET"])
-@require_permission('payments', 'read')
 def get_payment_reminders_payments():
     try:
         from datetime import datetime

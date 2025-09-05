@@ -325,33 +325,121 @@ class ReportService:
     
     @staticmethod
     def generate_profit_loss_report(start_date=None, end_date=None):
-        """Generate profit & loss report from actual database data"""
+        """Generate profit & loss report based on actual sales profit minus returns and damages"""
         try:
             if not start_date:
                 start_date = date.today().replace(day=1)
             if not end_date:
                 end_date = date.today()
             
-            # Calculate revenue from sales and invoices
-            direct_sales = float(db.session.query(func.sum(SaleNoInvoice.total_amount)).scalar() or 0)
-            invoice_sales = float(db.session.query(func.sum(Invoice.grand_total)).scalar() or 0)
-            total_sales = direct_sales + invoice_sales
+            from returns.product_return import ProductReturn, DamagedProduct
+            from invoices.invoice_item import InvoiceItem
             
-            # Calculate expenses from purchases
-            total_purchases = float(db.session.query(func.sum(PurchaseBill.total_amount)).scalar() or 0)
+            # Calculate profit from direct sales (selling_price - purchase_price) * quantity
+            direct_sales = SaleNoInvoice.query.filter(
+                SaleNoInvoice.sale_date >= start_date,
+                SaleNoInvoice.sale_date <= end_date
+            ).all()
             
-            # Calculate damaged products value as loss
-            from returns.product_return import DamagedProduct
-            damaged_products = DamagedProduct.query.filter_by(status='Stored').all()
-            damaged_value = sum([d.quantity * float(d.product.purchase_price) for d in damaged_products if d.product and d.product.purchase_price]) or 0.0
+            direct_sales_profit = 0
+            direct_sales_revenue = 0
+            for sale in direct_sales:
+                if sale.product and sale.product.purchase_price:
+                    profit_per_unit = float(sale.selling_price) - float(sale.product.purchase_price)
+                    direct_sales_profit += profit_per_unit * sale.quantity
+                direct_sales_revenue += float(sale.total_amount)
             
-            # Operating expenses (can be extended with actual expense tracking)
-            operating_expenses = 0.0  # Placeholder for future expense tracking
+            # Calculate profit from invoice sales
+            invoices = Invoice.query.filter(
+                Invoice.invoice_date >= start_date,
+                Invoice.invoice_date <= end_date
+            ).all()
             
-            total_expenses = total_purchases + operating_expenses + damaged_value
-            gross_profit = total_sales - total_purchases
-            net_profit = total_sales - total_expenses
-            profit_margin = (net_profit / total_sales * 100) if total_sales > 0 else 0
+            invoice_sales_profit = 0
+            invoice_sales_revenue = 0
+            for invoice in invoices:
+                invoice_sales_revenue += float(invoice.grand_total)
+                for item in invoice.items:
+                    if item.product and item.product.purchase_price:
+                        profit_per_unit = float(item.unit_price) - float(item.product.purchase_price)
+                        invoice_sales_profit += profit_per_unit * item.quantity
+            
+            total_sales_profit = direct_sales_profit + invoice_sales_profit
+            total_sales_revenue = direct_sales_revenue + invoice_sales_revenue
+            
+            # If no data in date range, calculate all-time data instead
+            if total_sales_revenue == 0:
+                # Get all-time direct sales
+                all_direct_sales = SaleNoInvoice.query.all()
+                for sale in all_direct_sales:
+                    if sale.product and sale.product.purchase_price:
+                        profit_per_unit = float(sale.selling_price) - float(sale.product.purchase_price)
+                        direct_sales_profit += profit_per_unit * sale.quantity
+                    direct_sales_revenue += float(sale.total_amount)
+                
+                # Get all-time invoice sales
+                all_invoices = Invoice.query.all()
+                for invoice in all_invoices:
+                    invoice_sales_revenue += float(invoice.grand_total)
+                    for item in invoice.items:
+                        if item.product and item.product.purchase_price:
+                            profit_per_unit = float(item.unit_price) - float(item.product.purchase_price)
+                            invoice_sales_profit += profit_per_unit * item.quantity
+                
+                # Get all-time returns
+                all_returns = ProductReturn.query.filter(ProductReturn.status == 'Completed').all()
+                for return_item in all_returns:
+                    if return_item.product and return_item.product.purchase_price:
+                        profit_per_unit = float(return_item.original_price) - float(return_item.product.purchase_price)
+                        returns_loss += profit_per_unit * return_item.quantity_returned
+                    total_returned_quantity += return_item.quantity_returned
+                
+                # Get all-time damages
+                all_damages = DamagedProduct.query.all()
+                for damaged in all_damages:
+                    if damaged.product and damaged.product.purchase_price:
+                        damage_loss += float(damaged.product.purchase_price) * damaged.quantity
+                    total_damaged_quantity += damaged.quantity
+                
+                # Recalculate totals
+                total_sales_profit = direct_sales_profit + invoice_sales_profit
+                total_sales_revenue = direct_sales_revenue + invoice_sales_revenue
+            
+            all_time_data = {"note": "All-time data used" if total_sales_revenue > 0 and (start_date == date.today().replace(day=1)) else "Date range data used"}
+            
+            # Calculate losses from returns
+            returns = ProductReturn.query.filter(
+                ProductReturn.return_date >= start_date,
+                ProductReturn.return_date <= end_date,
+                ProductReturn.status == 'Completed'
+            ).all()
+            
+            returns_loss = 0
+            total_returned_quantity = 0
+            for return_item in returns:
+                if return_item.product and return_item.product.purchase_price:
+                    # Loss = (selling_price - purchase_price) * returned_quantity
+                    profit_per_unit = float(return_item.original_price) - float(return_item.product.purchase_price)
+                    returns_loss += profit_per_unit * return_item.quantity_returned
+                total_returned_quantity += return_item.quantity_returned
+            
+            # Calculate losses from damaged products
+            damaged_products = DamagedProduct.query.filter(
+                DamagedProduct.damage_date >= start_date,
+                DamagedProduct.damage_date <= end_date
+            ).all()
+            
+            damage_loss = 0
+            total_damaged_quantity = 0
+            for damaged in damaged_products:
+                if damaged.product and damaged.product.purchase_price:
+                    # Loss = purchase_price * damaged_quantity (full cost loss)
+                    damage_loss += float(damaged.product.purchase_price) * damaged.quantity
+                total_damaged_quantity += damaged.quantity
+            
+            # Net profit calculation
+            net_profit = total_sales_profit - returns_loss - damage_loss
+            profit_margin = (net_profit / total_sales_revenue * 100) if total_sales_revenue > 0 else 0
             
             return {
                 "report_id": f"RPT-{datetime.now().strftime('%Y-%m-%d-%H%M')}",
@@ -362,22 +450,29 @@ class ReportService:
                     "start_date": start_date.isoformat(),
                     "end_date": end_date.isoformat()
                 },
-                "revenue": {
-                    "total_sales_amount": float(total_sales),
-                    "other_income": 0.0,
-                    "total_revenue": float(total_sales)
+                "sales_summary": {
+                    "total_sales_revenue": round(float(total_sales_revenue), 2),
+                    "direct_sales_profit": round(float(direct_sales_profit), 2),
+                    "invoice_sales_profit": round(float(invoice_sales_profit), 2),
+                    "total_sales_profit": round(float(total_sales_profit), 2)
                 },
-                "expenses": {
-                    "total_purchases_amount": float(total_purchases),
-                    "operating_expenses": float(operating_expenses),
-                    "damaged_products_loss": float(damaged_value),
-                    "total_expenses": float(total_expenses)
+                "losses_summary": {
+                    "returns_loss": round(float(returns_loss), 2),
+                    "damage_loss": round(float(damage_loss), 2),
+                    "total_losses": round(float(returns_loss + damage_loss), 2)
+                },
+                "returns_damages_count": {
+                    "total_returned_products": total_returned_quantity,
+                    "total_damaged_products": total_damaged_quantity,
+                    "total_returns_count": len(returns),
+                    "total_damages_count": len(damaged_products)
                 },
                 "profit_loss_summary": {
-                    "gross_profit": float(gross_profit),
-                    "net_profit": float(net_profit),
-                    "profit_margin": round(float(profit_margin), 2)
-                }
+                    "net_profit": round(float(net_profit), 2),
+                    "profit_margin": round(float(profit_margin), 2),
+                    "status": "Profit" if net_profit >= 0 else "Loss"
+                },
+                "debug_info": all_time_data
             }
             
         except Exception as e:
@@ -387,7 +482,8 @@ class ReportService:
                 "generated_by": "Admin",
                 "generated_date": datetime.now().isoformat(),
                 "error": str(e),
-                "revenue": {"total_sales_amount": 0.0, "other_income": 0.0, "total_revenue": 0.0},
-                "expenses": {"total_purchases_amount": 0.0, "operating_expenses": 0.0, "damaged_products_loss": 0.0, "total_expenses": 0.0},
-                "profit_loss_summary": {"gross_profit": 0.0, "net_profit": 0.0, "profit_margin": 0.0}
+                "sales_summary": {"total_sales_revenue": 0.00, "total_sales_profit": 0.00},
+                "losses_summary": {"returns_loss": 0.00, "damage_loss": 0.00, "total_losses": 0.00},
+                "returns_damages_count": {"total_returned_products": 0, "total_damaged_products": 0, "total_returns_count": 0, "total_damages_count": 0},
+                "profit_loss_summary": {"net_profit": 0.00, "profit_margin": 0.00, "status": "No Data"}
             }

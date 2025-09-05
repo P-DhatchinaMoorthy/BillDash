@@ -12,12 +12,15 @@
       .invoice-box { margin: 0; border: none; width: 100%; min-height: 100vh; padding: 15mm; }
       .page-break { page-break-before: always; }
       .no-print { display: none !important; }
-      .page-header { display: none; }
-      .page-break + .page-header { display: block; }
+      .page-header { display: block; }
     }
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 0; background: #f5f5f5; }
     .invoice-box { width: 210mm; min-height: 297mm; margin: 16px auto; padding: 20px; background: white; }
+    @media print {
+      .invoice-box { height: auto; }
+      .page-break-content { page-break-before: always; }
+    }
     .center { text-align: center; }
     .right { text-align: right; }
     .left { text-align: left; }
@@ -48,7 +51,7 @@
     .company-section { width: 50%; padding: 15px; display: flex; align-items: flex-end; }
     .logo-area { width: 120px; margin-right: 15px; }
     .company-info { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
-    .invoice-section { width: 50%; padding: 15px; border-left: 1px solid #000; display: flex; align-items: flex-end; justify-content: flex-end; }
+    .invoice-section { width: 50%; border-left: 1px solid #000; display: flex; align-items: flex-end; justify-content: flex-end; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -69,49 +72,50 @@
   <div class="header-box">
     <div class="company-section">
       <div class="logo-area">
+        {% if logo_base64 %}
+        <img src="data:image/jpeg;base64,{{ logo_base64 }}" alt="Company Logo" style="width:100px; height:80px; object-fit: contain;">
+        {% else %}
         <img src="/addons/DMlogo.jpg" alt="Company Logo" style="width:100px; height:80px; object-fit: contain;">
-        <div style="margin-top: 5px;">
-          <div class="brand-name" style="font-size: 14px;">{{ company_settings.business_name }}</div>
-          <div class="brand-slogan" style="font-size: 10px;">{{ company_settings.tagline or 'Excellence in Every Transaction' }}</div>
-        </div>
-      </div>
+        {% endif %}
+              </div>
       <div class="company-info" style="text-align: left; margin-left: 70px">
         <div style="font-size: 12px;">
-          Ph: {{ company_settings.primary_phone or 'Error' }}<br>
-          {% if company_settings.primary_email %}{{ company_settings.primary_email }}<br>{% endif %}
-          {% if company_settings.website %}{{ company_settings.website }}{% endif %}
         </div>
         <p style="margin-top: 10px; font-size: 11px;">
-        GSTIN {{ company_settings.gst_number or 'Error' }}<br>
+            <b>GSTIN {{ company_settings.gst_number or 'Error' }}</b><br>
         {{ company_settings.registered_address or 'Error' }}<br>
             {{ company_settings.state or 'Error' }}, {{ company_settings.postal_code or 'Error' }}
-        <br>Alt: {{ company_settings.secondary_phone }}
+            {% if company_settings.website %}{{ company_settings.website }}{% endif %}
+            Ph: {{ company_settings.primary_phone or 'Error' }}<br>
         </p>
       </div>
     </div>
     <div class="invoice-section">
-      <div style="text-align: left;">
-        <p>Invoice #: <b>{{ invoice.invoice_number }}</b><br>
-        Invoice ID: <b>{{ invoice.id }}</b><br>
-        Invoice Date: <b>{{ invoice.invoice_date[:10] }}</b><br>
-        Due Date: <b>{{ invoice.due_date[:10] if invoice.due_date else invoice.invoice_date[:10] }}</b><br>
-        Paymment Status: <b class="{% if invoice.status == 'Paid' %}status-paid{% elif invoice.status == 'Pending' %}status-pending{% elif invoice.status == 'Cancelled' %}status-cancelled{% endif %}">{{ invoice.status }}</b></p>
-      </div>
+      <table style="margin: 0px; border-collapse: collapse; border-top: 1px solid #000;" >
+        <tr >
+          <td style="border: 1px solid #000; padding: 8px; width: 50%;"><strong>Invoice #:</strong><br>{{ invoice.invoice_number }}</td>
+          <td style="border: 1px solid #000; padding: 8px; width: 50%;"><strong>Invoice Date:</strong><br>{{ invoice.invoice_date[:10] }}</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #000; padding: 8px;"><strong>Invoice ID:</strong><br>{{ invoice.id }}</td>
+          <td style="border: 1px solid #000; padding: 8px;"><strong>Due Date:</strong><br>{{ invoice.due_date[:10] if invoice.due_date else invoice.invoice_date[:10] }}</td>
+        </tr>
+      </table>
     </div>
   </div>
 
   <table style="width: 753px;">
     <tr>
       <td class="item-cell" style="width: 327px">
-        <b>{{ customer.id }}</b><br>
-        <b>{{ customer.contact_person }}</b><br>
-        <b>Billing address:</b><br>{{ customer.billing_address or 'Address not provided' }}<br>
+        <b>{{ customer.id }}</b>, <b>{{ customer.contact_person }}</b><br>
+        <b>Billing address:</b>{{ customer.billing_address or 'Address not provided' }}<br>
         <b>Ph: </b>{{ customer.phone }}
         {% if customer.email %}<br><b>Email: </b>{{ customer.email }}{% endif %}
       </td>
       <td class="item-cell" style="width: 326px">
         <b>Shipping address:</b>
-        {{ customer.shipping_address or customer.billing_address or 'Address not provided' }}
+        {{ customer.shipping_address or customer.billing_address or 'Address not provided' }}<br>
+        <b>Branch:</b> {{ customer.branch or 'Not specified' }}
       </td>
     </tr>
   </table>
@@ -138,35 +142,10 @@
     {% endfor %}
   </table>
 
-  <div class="amount-section" style="margin-right: 11px ; font-size: 12px" >
-  <p class="right">Subtotal:    ₹{{ "%.2f"|format(calculations.subtotal|float) }}</p>
-  {% if invoice.discount_amount and invoice.discount_amount != '0.00' %}
-  <p class="right">Discount:     -₹{{ "%.2f"|format(invoice.discount_amount|float) }}</p>
-  {% endif %}
-  {% set total_tax = invoice.tax_amount|float %}
-  {% if total_tax > 0 %}
-  <p class="right">CGST 9.0%:   ₹{{ "%.2f"|format(total_tax / 2) }}<br>SGST 9.0%: ₹{{ "%.2f"|format(total_tax / 2) }}</p>
-  {% endif %}
-  {% if invoice.shipping_charges and invoice.shipping_charges != '0.00' %}
-  <p class="right">Shipping Charges: ₹{{ "%.2f"|format(invoice.shipping_charges|float) }}</p>
-  {% endif %}
-  {% if invoice.other_charges and invoice.other_charges != '0.00' %}
-  <p class="right">Other Charges: ₹{{ "%.2f"|format(invoice.other_charges|float) }}</p>
-  {% endif %}
-  </div>
-
-  <table>
-    <tr class="total-row">
-      <td class="bold right">Grand Total</td>
-      <td class="bold">{{ items|sum(attribute='quantity') }}</td>
-      <td class="bold right" colspan="7">₹{{ calculations.grand_total }}</td>
-    </tr>
-  </table>
-
-  <p><b>Amount Chargeable (in words):</b> INR {{ amount_in_words or 'Amount in words not available' }}.</p>
-  <table class="bank-terms-table calc-table">
+    <div style="display: flex; gap: 10px;">
+        <table class="bank-terms-table calc-table" style="width: 75%;">
     <tr>
-      <th>HSN/SAC</th><th>Product Value</th><th>Central Tax Rate</th><th>Central Tax Amount</th><th>State Tax Rate</th><th>State Tax Amount</th><th>Total Tax Amount</th>
+      <th>HSN/SAC</th><th>Product Value</th><th>CGST %</th><th>CGST</th><th>SGST%</th><th>SGST</th><th>Total Tax Amount</th>
     </tr>
     {% set hsn_summary = {} %}
     {% for item in items %}
@@ -210,7 +189,7 @@
     </tr>
     {% endfor %}
     <tr class="total-row">
-      <td class="bold center-align">TOTAL</td>
+      <td class="bold center-align">Total</td>
       <td class="bold right-align">{{ "%.2f"|format(calculations.subtotal|float) }}</td>
       <td class="center-align"></td>
       <td class="bold right-align">{{ "%.2f"|format(invoice.tax_amount|float / 2) }}</td>
@@ -219,6 +198,65 @@
       <td class="bold right-align">{{ "%.2f"|format(calculations.tax_amount|float) }}</td>
     </tr>
   </table>
+
+
+    <table style="width: 30%; border: 1px solid #000; margin-left: auto;">
+    <!-- Subtotal Row -->
+    <tr>
+      <td colspan="8" style="width: 126px" class="right bold">Taxable Amount</td>
+      <td class="bold" style="width: 86px">₹{{ "%.2f"|format(calculations.subtotal|float) }}</td>
+    </tr>
+    
+    <!-- CGST Row -->
+    {% set total_tax = invoice.tax_amount|float %}
+    {% if total_tax > 0 %}
+    <tr>
+      <td colspan="8" class="right">CGST 9.0%</td>
+      <td style="display: flex; justify-content: end; border: 0px">₹{{ "%.2f"|format(total_tax / 2) }}</td>
+    </tr>
+    
+    <!-- SGST Row -->
+    <tr>
+      <td colspan="8" class="right">SGST 9.0%</td>
+      <td style="display: flex; justify-content: end; border: 0px">₹{{ "%.2f"|format(total_tax / 2) }}</td>
+    </tr>
+    {% endif %}
+    
+    <!-- Discount Row -->
+    {% if invoice.discount_amount and invoice.discount_amount != '0.00' %}
+    <tr>
+      <td colspan="8" class="right">Discount</td>
+      <td style="display: flex; justify-content: end; border: 0px">-₹{{ "%.2f"|format(invoice.discount_amount|float) }}</td>
+    </tr>
+    {% endif %}
+    
+    <!-- Shipping Charges Row -->
+    {% if invoice.shipping_charges and invoice.shipping_charges != '0.00' %}
+    <tr>
+      <td colspan="8" class="right">Shipping Charges</td>
+      <td style="display: flex; justify-content: end; border: 0px">₹{{ "%.2f"|format(invoice.shipping_charges|float) }}</td>
+    </tr>
+    {% endif %}
+    
+    <!-- Other Charges Row -->
+    {% if invoice.other_charges and invoice.other_charges != '0.00' %}
+    <tr>
+      <td colspan="8" class="right">Other Charges</td>
+      <td style="display: flex; justify-content: end; border: 0px">₹{{ "%.2f"|format(invoice.other_charges|float) }}</td>
+    </tr>
+    {% endif %}
+    
+    <!-- Grand Total Row -->
+    <tr class="total-row">
+      <td colspan="8" class="bold right"> Grand Total</td>
+<!--      <td class="bold">{{ items|sum(attribute='quantity') }} </td>-->
+      <td class="bold">₹{{ calculations.grand_total }} </td>
+    </tr>
+  </table>
+
+</div>
+
+  <p><b>Amount Chargeable (in words):</b> INR {{ amount_in_words or 'Amount in words not available' }}.</p>
 
 <div class="page-break"></div>
 
@@ -257,7 +295,7 @@
     <!-- Right Side: Big Status -->
     <div style="display: flex; align-items: center; justify-content: center; min-width: 200px; margin-right: 60px">
       <h2 style="font-size: 20px; font-weight: bold; margin: 0; color: black; text-align: right;">
-          PAYMENT: <b class="{% if invoice.status == 'Paid' %}status-paid{% elif invoice.status == 'Pending' %}status-pending{% elif invoice.status == 'Cancelled' %}status-cancelled{% endif %}">{{ invoice.status|upper }}</b></p>
+          PAYMENT : <b class="{% if invoice.status == 'Paid' %}status-paid{% elif invoice.status == 'Pending' %}status-pending{% elif invoice.status == 'Cancelled' %}status-cancelled{% endif %}">{{ invoice.status|upper }}</b></p>
       </h2>
     </div>
   </div>
@@ -336,41 +374,62 @@
     }
 
     function sendMail() {
-      const invoiceId = '{{ invoice_id }}';
-      const customerEmail = '{{ customer.email }}';
+      const invoiceId = '{{ invoice_id or invoice.id }}';
+      const customerEmail = '{{ customer.email or "" }}';
       
-      if (!customerEmail) {
-        alert('Customer email not found!');
+      console.log('Debug - Invoice ID:', invoiceId);
+      console.log('Debug - Customer Email:', customerEmail);
+      
+      if (!invoiceId || invoiceId === '') {
+        alert('Invoice ID not found!');
         return;
       }
       
+      if (!customerEmail || customerEmail === '') {
+        const email = prompt('Enter customer email address:');
+        if (!email) {
+          alert('Email is required to send invoice!');
+          return;
+        }
+        customerEmail = email;
+      }
+      
       if (confirm(`Send invoice to ${customerEmail}?`)) {
+        const requestData = {
+          invoice_id: invoiceId,
+          customer_email: customerEmail
+        };
+        
+        console.log('Sending request:', requestData);
+        
         fetch('/send-invoice-email', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            invoice_id: invoiceId,
-            customer_email: customerEmail
-          })
+          body: JSON.stringify(requestData)
         })
-        .then(response => response.json())
+        .then(response => {
+          console.log('Response status:', response.status);
+          return response.json();
+        })
         .then(data => {
+          console.log('Response data:', data);
           if (data.success) {
             alert('Invoice sent successfully!');
           } else {
             alert('Failed to send invoice: ' + data.error);
+            if (data.debug_info) {
+              console.log('Debug info:', data.debug_info);
+            }
           }
         })
         .catch(error => {
           console.error('Error:', error);
-          alert('Failed to send invoice');
+          alert('Failed to send invoice: ' + error.message);
         });
       }
     }
-
-
   </script>
 
 </div>

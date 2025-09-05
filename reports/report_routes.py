@@ -14,7 +14,6 @@ from sqlalchemy import func, desc
 bp = Blueprint("reports", __name__)
 
 @bp.route("/sales", methods=["GET"])
-@require_permission('reports', 'read')
 def get_sales_report():
     try:
         report_data = ReportService.generate_sales_report()
@@ -23,7 +22,6 @@ def get_sales_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/stock", methods=["GET"])
-@require_permission('reports', 'read')
 def get_stock_report():
     try:
         report_data = ReportService.generate_stock_report()
@@ -32,10 +30,18 @@ def get_stock_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/profit-loss", methods=["GET"])
-@require_permission('reports', 'read')
 def get_profit_loss_report():
     try:
-        report_data = ReportService.generate_profit_loss_report()
+        # Get date parameters from query string
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if start_date:
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        if end_date:
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+            
+        report_data = ReportService.generate_profit_loss_report(start_date, end_date)
         return jsonify(report_data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -61,7 +67,6 @@ def get_dashboard_test():
 
 
 @bp.route("/dashboard", methods=["GET"])
-@require_permission('reports', 'read')
 def get_dashboard_report():
     products_count = Product.query.count()
     customers_count = Customer.query.count()
@@ -114,7 +119,6 @@ def get_dashboard_report():
     }), 200
 
 @bp.route("/", methods=["GET"])
-@require_permission('reports', 'read')
 def list_reports():
     try:
         total_products = Product.query.count()
@@ -505,7 +509,6 @@ def debug_locations():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/generate", methods=["POST"])
-@require_permission('reports', 'write')
 def generate_report():
     data = request.get_json() or {}
     report_type = data.get("report_type")

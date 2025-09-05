@@ -102,32 +102,28 @@ def create_damage_record():
         return jsonify({"error": str(e)}), 400
 
 
+@bp.route("/damage", methods=["GET"])
 @bp.route("/damage/", methods=["GET"])
 def list_damage_records():
-    from purchases.supplier_damage import SupplierDamage
+    from returns.product_return import DamagedProduct
+    from products.product import Product
     
-    supplier_id = request.args.get('supplier_id')
-    query = SupplierDamage.query
-    if supplier_id:
-        query = query.filter_by(supplier_id=supplier_id)
-    
-    damages = query.all()
+    damages = DamagedProduct.query.all()
     result = []
     
     for damage in damages:
+        product = Product.query.get(damage.product_id) if damage.product_id else None
         result.append({
             "damage_id": damage.id,
-            "damage_number": damage.damage_number,
-            "purchase_id": damage.purchase_id,
-            "supplier_name": damage.supplier.name if damage.supplier else None,
-            "product_name": damage.product.product_name if damage.product else None,
-            "quantity_damaged": damage.quantity_damaged,
-            "damage_type": damage.damage_type,
-            "unit_price": str(damage.unit_price),
-            "total_amount": str(damage.total_amount),
-            "refund_amount": str(damage.refund_amount),
+            "product_id": damage.product_id,
+            "product_name": product.product_name if product else "Unknown",
+            "quantity": damage.quantity,
+            "damage_date": damage.damage_date.isoformat(),
+            "damage_reason": damage.damage_reason,
+            "damage_level": damage.damage_level,
             "status": damage.status,
-            "damage_date": damage.damage_date.isoformat()
+            "action_taken": damage.action_taken,
+            "repair_cost": str(damage.repair_cost) if damage.repair_cost else "0.00"
         })
     
     return jsonify(result), 200
@@ -135,52 +131,44 @@ def list_damage_records():
 
 @bp.route("/damage/<int:damage_id>", methods=["GET"])
 def get_damage_details(damage_id):
-    from purchases.supplier_damage import SupplierDamage
+    from returns.product_return import DamagedProduct
+    from products.product import Product
     
-    damage = SupplierDamage.query.get(damage_id)
+    damage = DamagedProduct.query.get(damage_id)
     if not damage:
         return jsonify({"error": "Damage record not found"}), 404
     
+    product = Product.query.get(damage.product_id) if damage.product_id else None
+    
     return jsonify({
         "damage_id": damage.id,
-        "damage_number": damage.damage_number,
-        "purchase_id": damage.purchase_id,
-        "supplier": {
-            "id": damage.supplier.id,
-            "name": damage.supplier.name,
-            "contact_person": damage.supplier.contact_person,
-            "phone": damage.supplier.phone
-        } if damage.supplier else None,
         "product": {
-            "id": damage.product.id,
-            "name": damage.product.product_name,
-            "sku": damage.product.sku
-        } if damage.product else None,
+            "id": product.id,
+            "name": product.product_name,
+            "sku": product.sku,
+            "purchase_price": str(product.purchase_price) if product.purchase_price else "0.00"
+        } if product else None,
         "damage_details": {
-            "quantity_damaged": damage.quantity_damaged,
-            "damage_type": damage.damage_type,
+            "quantity": damage.quantity,
             "damage_reason": damage.damage_reason,
+            "damage_level": damage.damage_level,
             "damage_date": damage.damage_date.isoformat()
         },
-        "financial_details": {
-            "unit_price": str(damage.unit_price),
-            "total_amount": str(damage.total_amount),
-            "refund_amount": str(damage.refund_amount)
+        "storage_info": {
+            "storage_location": damage.storage_location,
+            "status": damage.status
         },
-        "status_tracking": {
-            "status": damage.status,
-            "supplier_response": damage.supplier_response,
-            "created_by": damage.created_by,
-            "resolved_by": damage.resolved_by,
-            "resolved_date": damage.resolved_date.isoformat() if damage.resolved_date else None
+        "action_details": {
+            "action_taken": damage.action_taken,
+            "action_date": damage.action_date.isoformat() if damage.action_date else None,
+            "repair_cost": str(damage.repair_cost) if damage.repair_cost else "0.00",
+            "refund_amount": str(float(product.purchase_price or 0) * damage.quantity) if damage.action_taken == "Dispose" and product else "0.00",
+            "is_replacement": "Yes" if damage.action_taken == "Return_to_Supplier" else "No"
         },
-        "replacement_details": {
-            "replacement_quantity": damage.replacement_quantity,
-            "replacement_date": damage.replacement_date.isoformat() if damage.replacement_date else None
-        },
-        "notes": damage.notes,
-        "created_at": damage.created_at.isoformat(),
-        "updated_at": damage.updated_at.isoformat() if damage.updated_at else None
+        "timestamps": {
+            "created_at": damage.created_at.isoformat(),
+            "updated_at": damage.updated_at.isoformat() if damage.updated_at else None
+        }
     }), 200
 
 

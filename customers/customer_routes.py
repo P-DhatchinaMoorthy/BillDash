@@ -28,7 +28,6 @@ def handle_options():
 
 # -------------------- CREATE CUSTOMER --------------------
 @bp.route("/", methods=["POST", "OPTIONS"])
-@require_permission('customers', 'write')
 def create_customer():
     if request.content_type and 'multipart/form-data' in request.content_type:
         data = request.form.to_dict()
@@ -87,7 +86,6 @@ def create_customer():
 
 # -------------------- LIST CUSTOMERS --------------------
 @bp.route("/", methods=["GET", "OPTIONS"])
-@require_permission('customers', 'read')
 def list_customers():
     page = int(request.args.get('page', 1))
     per_page = 10
@@ -153,7 +151,6 @@ def list_customers():
 
 # -------------------- GET CUSTOMER --------------------
 @bp.route("/<customer_id>", methods=["GET", "OPTIONS"])
-@require_permission('customers', 'read')
 def get_customer(customer_id):
     try:
         customer_id = int(customer_id)
@@ -186,7 +183,6 @@ def get_customer(customer_id):
 
 # -------------------- UPDATE CUSTOMER --------------------
 @bp.route("/<customer_id>", methods=["PUT", "OPTIONS"])
-@require_permission('customers', 'write')
 def update_customer(customer_id):
     try:
         customer_id = int(customer_id)
@@ -217,7 +213,6 @@ def update_customer(customer_id):
 
 # -------------------- GET CUSTOMER INVOICES --------------------
 @bp.route("/<customer_id>/invoices", methods=["GET", "OPTIONS"])
-@require_permission('customers', 'read')
 def get_customer_invoices(customer_id):
     try:
         customer_id = int(customer_id)
@@ -250,14 +245,52 @@ def get_customer_invoices(customer_id):
             if payment_status_filter and payment_status != payment_status_filter.lower():
                 continue
             
+            # Get invoice items with product details
+            from invoices.invoice_item import InvoiceItem
+            from products.product import Product
+            
+            invoice_items = InvoiceItem.query.filter_by(invoice_id=invoice.id).all()
+            items = []
+            for item in invoice_items:
+                product = Product.query.get(item.product_id)
+                items.append({
+                    "product_id": item.product_id,
+                    "product_name": product.product_name if product else None,
+                    "sku": product.sku if product else None,
+                    "quantity": item.quantity,
+                    "unit_price": str(item.unit_price),
+                    "discount_per_item": str(item.discount_per_item),
+                    "discount_type": item.discount_type,
+                    "tax_rate_per_item": str(item.tax_rate_per_item),
+                    "total_price": str(item.total_price)
+                })
+            
             invoices_list.append({
                 "invoice_id": invoice.id,
                 "invoice_number": invoice.invoice_number,
                 "customer_id": invoice.customer_id,
-                "amount": float(invoice.grand_total),
                 "invoice_date": invoice.invoice_date.strftime("%Y-%m-%d"),
                 "due_date": invoice.due_date.strftime("%Y-%m-%d") if invoice.due_date else None,
-                "payment_status": payment_status
+                "total_before_tax": str(invoice.total_before_tax),
+                "tax_amount": str(invoice.tax_amount),
+                "cgst_amount": str(getattr(invoice, 'cgst_amount', 0)),
+                "sgst_amount": str(getattr(invoice, 'sgst_amount', 0)),
+                "igst_amount": str(getattr(invoice, 'igst_amount', 0)),
+                "discount_amount": str(invoice.discount_amount),
+                "shipping_charges": str(invoice.shipping_charges),
+                "other_charges": str(invoice.other_charges),
+                "additional_discount": str(getattr(invoice, 'additional_discount', 0)),
+                "grand_total": str(invoice.grand_total),
+                "payment_terms": invoice.payment_terms,
+                "currency": invoice.currency,
+                "status": invoice.status,
+                "notes": invoice.notes,
+                "payment_status": payment_status,
+                "payment_id": payment.id if payment else None,
+                "items": items,
+                "total_items": len(items),
+                "created_at": invoice.created_at.isoformat(),
+                "updated_at": invoice.updated_at.isoformat() if invoice.updated_at else None
             })
         
         return jsonify({
@@ -281,7 +314,6 @@ def get_customer_invoices(customer_id):
 
 # -------------------- EXPORT CUSTOMERS --------------------
 @bp.route("/export", methods=["GET", "OPTIONS"])
-@require_permission('customers', 'read')
 def export_customers():
     try:
         format_type = request.args.get('format', 'csv').lower()
@@ -334,7 +366,6 @@ def export_customers():
 
 # -------------------- BULK IMPORT --------------------
 @bp.route("/bulk-import", methods=["POST", "OPTIONS"])
-@require_permission('customers', 'write')
 def bulk_import_customers():
     try:
         if 'file' not in request.files:

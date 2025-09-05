@@ -43,9 +43,9 @@ class SupplierDamage(db.Model):
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
     # Relationships
-    purchase = relationship("StockTransaction")
-    supplier = relationship("Supplier")
-    product = relationship("Product")
+    purchase = relationship("StockTransaction", foreign_keys=[purchase_id])
+    supplier = relationship("Supplier", foreign_keys=[supplier_id])
+    product = relationship("Product", foreign_keys=[product_id])
 
     def __init__(self, **kwargs):
         if 'damage_number' not in kwargs:

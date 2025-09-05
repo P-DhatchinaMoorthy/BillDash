@@ -6,7 +6,6 @@ from user.auth_bypass import require_permission
 bp = Blueprint("settings", __name__)
 
 @bp.route("/", methods=["GET"])
-@require_permission('settings', 'read')
 def get_settings():
     settings = Settings.query.first()
     if not settings:
@@ -35,7 +34,6 @@ def get_settings():
     }), 200
 
 @bp.route("/", methods=["POST"])
-@require_permission('settings', 'write')
 def create_settings():
     # Check if settings already exist
     if Settings.query.first():
@@ -53,7 +51,6 @@ def create_settings():
     return jsonify({"message": "Settings created successfully"}), 201
 
 @bp.route("/", methods=["PUT"])
-@require_permission('settings', 'write')
 def update_settings():
     data = request.get_json() or {}
     

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, render_template_string
 from .email_service import EmailService
 import sys
 import os
+from datetime import datetime
 
 # Add the backend directory to the path to import other modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,56 +14,210 @@ email_service = EmailService()
 def send_invoice_email():
     """API endpoint to send invoice via email"""
     try:
-        data = request.get_json()
-        invoice_id = data.get('invoice_id')
-        customer_email = data.get('customer_email')
+        # Try multiple ways to get the data
+        data = request.get_json() or {}
+        form_data = request.form.to_dict()
+        args_data = request.args.to_dict()
+        
+        print(f"DEBUG: JSON data: {data}")
+        print(f"DEBUG: Form data: {form_data}")
+        print(f"DEBUG: Args data: {args_data}")
+        print(f"DEBUG: Content-Type: {request.content_type}")
+        print(f"DEBUG: Method: {request.method}")
+        
+        # Try to get invoice_id and customer_email from any source
+        invoice_id = data.get('invoice_id') or form_data.get('invoice_id') or args_data.get('invoice_id')
+        customer_email = data.get('customer_email') or form_data.get('customer_email') or args_data.get('customer_email')
+        
+        print(f"DEBUG: Final values - invoice_id: {invoice_id}, customer_email: {customer_email}")
         
         if not invoice_id or not customer_email:
-            return jsonify({"success": False, "error": "Missing invoice_id or customer_email"})
+            return jsonify({
+                "success": False, 
+                "error": "Missing invoice_id or customer_email",
+                "debug_info": {
+                    "received_json": data,
+                    "received_form": form_data,
+                    "received_args": args_data
+                }
+            })
         
         # Import required modules (adjust imports based on your project structure)
         try:
-            from invoices.invoice_service import InvoiceService
+            from invoices.invoice import Invoice
             from customers.customer import Customer
-            from settings.company_settings import CompanySettings
+            from settings.company_settings import Settings
         except ImportError as e:
             return jsonify({"success": False, "error": f"Import error: {str(e)}"})
         
         # Get invoice data
-        invoice_service = InvoiceService()
-        invoice_data = invoice_service.get_invoice_by_id(invoice_id)
-        
-        if not invoice_data:
+        invoice = Invoice.query.get(invoice_id)
+        if not invoice:
             return jsonify({"success": False, "error": "Invoice not found"})
+            
+        # Get invoice items
+        from invoices.invoice_item import InvoiceItem
+        invoice_items = InvoiceItem.query.filter_by(invoice_id=invoice_id).all()
+        
+        items_data = []
+        for item in invoice_items:
+            from products.product import Product
+            from category.category import Category
+            product = Product.query.get(item.product_id)
+            
+            # Get HSN code from product's category if not in product
+            hsn_code = 'N/A'
+            if product:
+                if hasattr(product, 'hsn_code') and product.hsn_code:
+                    hsn_code = product.hsn_code
+                elif product.category_id:
+                    category = Category.query.get(product.category_id)
+                    if category and category.hsn_code:
+                        hsn_code = category.hsn_code
+            
+            items_data.append({
+                'product_id': item.product_id,
+                'product_name': product.product_name if product else 'Unknown Product',
+                'sku': product.sku if product else 'N/A',
+                'hsn_code': hsn_code,
+                'quantity': item.quantity,
+                'unit_price': float(item.unit_price),
+                'total_price': float(item.total_price),
+                'tax_rate_per_item': float(item.tax_rate_per_item),
+                'unit_of_measure': product.unit_of_measure if product else 'NOS',
+                'description': getattr(product, 'description', '') if product else '',
+                'batch_number': getattr(product, 'batch_number', '') if product else '',
+                'expiry_date': str(product.expiry_date) if product and hasattr(product, 'expiry_date') and product.expiry_date else ''
+            })
+        
+        invoice_data = {
+            'invoice_number': invoice.invoice_number,
+            'invoice_date': invoice.invoice_date.strftime('%Y-%m-%d') if invoice.invoice_date else '',
+            'due_date': invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '',
+            'grand_total': str(invoice.grand_total),
+            'customer_id': invoice.customer_id,
+            'status': invoice.status,
+            'id': invoice.id,
+            'tax_amount': str(invoice.tax_amount),
+            'discount_amount': str(invoice.discount_amount),
+            'shipping_charges': str(invoice.shipping_charges),
+            'other_charges': str(invoice.other_charges)
+        }
+
         
         # Get customer data
-        customer = Customer()
-        customer_data = customer.get_customer_by_id(invoice_data.get('customer_id'))
+        customer = Customer.query.get(invoice_data.get('customer_id'))
+        if customer:
+            customer_data = {
+                'id': customer.id,
+                'contact_person': customer.contact_person or 'Unknown Customer',
+                'business_name': customer.business_name or customer.contact_person,
+                'email': customer.email or '',
+                'phone': customer.phone or 'N/A',
+                'billing_address': customer.billing_address or 'Address not provided',
+                'shipping_address': customer.shipping_address or customer.billing_address or 'Address not provided',
+                'payment_terms': customer.payment_terms or ''
+            }
+        else:
+            customer_data = {
+                'id': 'N/A',
+                'contact_person': 'Unknown Customer',
+                'business_name': 'Unknown Customer',
+                'email': '',
+                'phone': 'N/A',
+                'billing_address': 'Address not provided',
+                'shipping_address': 'Address not provided',
+                'payment_terms': ''
+            }
         
         # Get company settings
-        company_settings = CompanySettings()
-        company_data = company_settings.get_settings()
+        company_settings = Settings.query.first()
+        if company_settings:
+            company_data = {
+                'business_name': company_settings.business_name or 'Your Company',
+                'tagline': company_settings.tagline or 'Excellence in Every Transaction',
+                'primary_email': company_settings.primary_email or 'info@company.com',
+                'primary_phone': company_settings.primary_phone or '+91-XXXXXXXXXX',
+                'secondary_phone': company_settings.secondary_phone or 'N/A',
+                'gst_number': company_settings.gst_number or 'GSTIN-XXXXXXXXX',
+                'registered_address': company_settings.registered_address or 'Address not available',
+                'state': company_settings.state or 'State',
+                'postal_code': company_settings.postal_code or '000000',
+                'website': company_settings.website or 'www.company.com'
+            }
+        else:
+            company_data = {
+                'business_name': 'Your Company',
+                'tagline': 'Excellence in Every Transaction',
+                'primary_email': 'info@company.com',
+                'primary_phone': '+91-XXXXXXXXXX',
+                'secondary_phone': 'N/A',
+                'gst_number': 'GSTIN-XXXXXXXXX',
+                'registered_address': 'Address not available',
+                'state': 'State',
+                'postal_code': '000000',
+                'website': 'www.company.com'
+            }
         
         # Read the invoice template
         template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'invoice_template.html')
         with open(template_path, 'r', encoding='utf-8') as f:
             template_content = f.read()
         
-        # Render the template with data (you'll need to adapt this based on your template variables)
-        # This is a simplified version - you may need to adjust based on your actual data structure
+        # Create calculations object
+        calculations = {
+            'subtotal': float(invoice.total_before_tax),
+            'grand_total': float(invoice.grand_total),
+            'tax_amount': float(invoice.tax_amount)
+        }
+        
+        # Convert amount to words (basic implementation)
+        def number_to_words(amount):
+            try:
+                # Basic implementation - you can enhance this
+                amount_int = int(float(amount))
+                if amount_int == 0:
+                    return "Zero"
+                # Simple conversion for demo
+                return f"Rupees {amount_int} Only"
+            except:
+                return "Amount conversion error"
+        
+        amount_in_words = number_to_words(invoice.grand_total)
+        
+        # Encode logo to base64
+        import base64
+        logo_base64 = ''
+        try:
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'addons', 'DMlogo.jpg')
+            if os.path.exists(logo_path):
+                with open(logo_path, 'rb') as logo_file:
+                    logo_base64 = base64.b64encode(logo_file.read()).decode('utf-8')
+        except Exception as e:
+            print(f"Logo encoding error: {e}")
+        
+        # Create summary object
+        summary = {
+            'total_amount_paid': '0.00',
+            'balance_due': str(invoice.grand_total),
+            'payment_status': invoice.status
+        }
+        
+        # Render the template with data
         invoice_context = {
             'invoice': invoice_data,
             'customer': customer_data,
             'company_settings': company_data,
             'invoice_number': invoice_data.get('invoice_number'),
             'invoice_id': invoice_id,
-            'items': invoice_data.get('items', []),
-            'calculations': invoice_data.get('calculations', {}),
-            'payments': invoice_data.get('payments', []),
-            'summary': invoice_data.get('summary', {}),
-            'amount_in_words': invoice_data.get('amount_in_words', ''),
-            'generated_at': invoice_data.get('generated_at', ''),
-            'currency': 'INR'
+            'items': items_data,
+            'calculations': calculations,
+            'payments': [],
+            'summary': summary,
+            'amount_in_words': amount_in_words,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'currency': 'INR',
+            'logo_base64': logo_base64
         }
         
         # Remove the buttons and scripts from HTML for PDF generation
@@ -91,4 +246,7 @@ def send_invoice_email():
         return jsonify(result)
         
     except Exception as e:
+        print(f"DEBUG: Exception: {str(e)}")
+        import traceback
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
         return jsonify({"success": False, "error": str(e)})
