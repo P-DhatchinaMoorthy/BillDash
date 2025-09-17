@@ -1,5 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template_string
 from .email_service import EmailService
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
 import sys
 import os
 from datetime import datetime
@@ -11,36 +13,31 @@ mail_bp = Blueprint('mail', __name__)
 email_service = EmailService()
 
 @mail_bp.route('/send-invoice-email', methods=['POST'])
+@require_permission_jwt('invoices', 'write')
+@audit_decorator('invoices', 'EMAIL_SEND')
 def send_invoice_email():
     """API endpoint to send invoice via email"""
     try:
-        # Try multiple ways to get the data
-        data = request.get_json() or {}
-        form_data = request.form.to_dict()
-        args_data = request.args.to_dict()
+        # Handle different content types
+        data = {}
+        if request.is_json:
+            data = request.get_json() or {}
+        elif request.form:
+            data = request.form.to_dict()
         
-        print(f"DEBUG: JSON data: {data}")
-        print(f"DEBUG: Form data: {form_data}")
-        print(f"DEBUG: Args data: {args_data}")
-        print(f"DEBUG: Content-Type: {request.content_type}")
-        print(f"DEBUG: Method: {request.method}")
+        # Fallback to args if no data found
+        if not data:
+            data = request.args.to_dict()
         
-        # Try to get invoice_id and customer_email from any source
-        invoice_id = data.get('invoice_id') or form_data.get('invoice_id') or args_data.get('invoice_id')
-        customer_email = data.get('customer_email') or form_data.get('customer_email') or args_data.get('customer_email')
-        
-        print(f"DEBUG: Final values - invoice_id: {invoice_id}, customer_email: {customer_email}")
+        # Get required parameters
+        invoice_id = data.get('invoice_id')
+        customer_email = data.get('customer_email')
         
         if not invoice_id or not customer_email:
             return jsonify({
                 "success": False, 
-                "error": "Missing invoice_id or customer_email",
-                "debug_info": {
-                    "received_json": data,
-                    "received_form": form_data,
-                    "received_args": args_data
-                }
-            })
+                "error": "Missing invoice_id or customer_email"
+            }), 400
         
         # Import required modules (adjust imports based on your project structure)
         try:
@@ -90,6 +87,19 @@ def send_invoice_email():
                 'expiry_date': str(product.expiry_date) if product and hasattr(product, 'expiry_date') and product.expiry_date else ''
             })
         
+        # Get payment status
+        from payments.payment import Payment
+        payments = Payment.query.filter_by(invoice_id=invoice_id).all()
+        total_paid = sum(float(p.amount_paid or 0) for p in payments)
+        balance_due = float(invoice.grand_total) - total_paid
+        
+        if balance_due <= 0:
+            payment_status = 'Paid'
+        elif total_paid > 0:
+            payment_status = 'Partially Paid'
+        else:
+            payment_status = 'Pending'
+        
         invoice_data = {
             'invoice_number': invoice.invoice_number,
             'invoice_date': invoice.invoice_date.strftime('%Y-%m-%d') if invoice.invoice_date else '',
@@ -101,7 +111,15 @@ def send_invoice_email():
             'tax_amount': str(invoice.tax_amount),
             'discount_amount': str(invoice.discount_amount),
             'shipping_charges': str(invoice.shipping_charges),
-            'other_charges': str(invoice.other_charges)
+            'other_charges': str(invoice.other_charges),
+            'total_before_tax': str(invoice.total_before_tax)
+        }
+        
+        # Add payment summary
+        summary = {
+            'total_amount_paid': f'{total_paid:.2f}',
+            'balance_due': f'{balance_due:.2f}',
+            'payment_status': payment_status
         }
 
         
@@ -143,7 +161,11 @@ def send_invoice_email():
                 'registered_address': company_settings.registered_address or 'Address not available',
                 'state': company_settings.state or 'State',
                 'postal_code': company_settings.postal_code or '000000',
-                'website': company_settings.website or 'www.company.com'
+                'website': company_settings.website or 'www.company.com',
+                'bank_name': company_settings.bank_name or 'Your Bank Name',
+                'account_number': company_settings.account_number or 'Your Account Number',
+                'ifsc_code': company_settings.ifsc_code or 'Your IFSC Code',
+                'branch': company_settings.branch or 'Your Branch'
             }
         else:
             company_data = {
@@ -196,12 +218,7 @@ def send_invoice_email():
         except Exception as e:
             print(f"Logo encoding error: {e}")
         
-        # Create summary object
-        summary = {
-            'total_amount_paid': '0.00',
-            'balance_due': str(invoice.grand_total),
-            'payment_status': invoice.status
-        }
+        # Use calculated summary object (already created above)
         
         # Render the template with data
         invoice_context = {
@@ -220,14 +237,9 @@ def send_invoice_email():
             'logo_base64': logo_base64
         }
         
-        # Remove the buttons and scripts from HTML for PDF generation
-        html_content = template_content
-        # Remove the no-print sections for PDF
-        html_content = html_content.replace('class="no-print"', 'style="display:none"')
-        
-        # Render template (simplified - you may need Jinja2 rendering)
+        # Render the complete invoice template with all data
         from jinja2 import Template
-        template = Template(html_content)
+        template = Template(template_content)
         rendered_html = template.render(**invoice_context)
         
         # Prepare invoice data for email
@@ -241,7 +253,11 @@ def send_invoice_email():
         }
         
         # Send email
-        result = email_service.send_invoice_email(customer_email, email_invoice_data, rendered_html)
+        # Store the rendered HTML in context
+        invoice_context['html_template'] = rendered_html
+        
+        # Send email with complete rendered HTML and context
+        result = email_service.send_invoice_email(customer_email, email_invoice_data, rendered_html, invoice_context)
         
         return jsonify(result)
         

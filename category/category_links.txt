@@ -5,3 +5,5 @@ GET    /categories/           - List all categories
 GET    /categories/{id}       - Get specific category
 PUT    /categories/{id}       - Update category
 POST   /categories/bulk       - Bulk upload via CSV/Excel
+GET    /categories/export/excel - Export all categories to Excel
+GET    /categories/export/csv   - Export all categories to CSV

@@ -1,13 +1,19 @@
-from flask import Blueprint, request, jsonify
-from extensions import db
+from flask import Blueprint, request, jsonify, make_response
+from src.extensions import db
 from suppliers.supplier import Supplier
 from customers.customer import Customer
 from stock_transactions.stock_transaction import StockTransaction
-from user.auth_bypass import require_permission
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
+import csv
+import io
+from datetime import datetime
 
 bp = Blueprint("suppliers", __name__)
 
 @bp.route("/", methods=["POST"])
+@require_permission_jwt('suppliers', 'write')
+@audit_decorator('suppliers', 'CREATE')
 def create_supplier():
     data = request.get_json() or {}
     
@@ -62,6 +68,7 @@ def create_supplier():
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/", methods=["GET"])
+@require_permission_jwt('suppliers', 'read')
 def list_suppliers():
     search = request.args.get('search', '').strip()
     
@@ -93,6 +100,7 @@ def list_suppliers():
     } for x in sup]), 200
 
 @bp.route("/<int:supplier_id>", methods=["GET"])
+@require_permission_jwt('suppliers', 'read')
 def get_supplier(supplier_id):
     s = Supplier.query.get(supplier_id)
     if not s:
@@ -178,6 +186,7 @@ def get_supplier(supplier_id):
     }), 200
 
 @bp.route("/<int:supplier_id>/purchase-history", methods=["GET"])
+@require_permission_jwt('suppliers', 'read')
 def get_supplier_purchase_history(supplier_id):
     s = Supplier.query.get(supplier_id)
     if not s:
@@ -277,6 +286,7 @@ def get_supplier_purchase_history(supplier_id):
 
 
 @bp.route("/<int:supplier_id>/payment-history", methods=["GET"])
+@require_permission_jwt('suppliers', 'read')
 def get_supplier_payment_history(supplier_id):
     s = Supplier.query.get(supplier_id)
     if not s:
@@ -359,6 +369,7 @@ def get_supplier_payment_history(supplier_id):
 
 
 @bp.route("/purchase-history", methods=["GET"])
+@require_permission_jwt('suppliers', 'read')
 def get_all_purchase_history():
     from datetime import datetime
     date_from = request.args.get('date_from')
@@ -449,6 +460,7 @@ def get_all_purchase_history():
     return jsonify({"purchase_history": purchase_history}), 200
 
 @bp.route("/payment-history", methods=["GET"])
+@require_permission_jwt('suppliers', 'read')
 def get_all_payment_history():
     from datetime import datetime
     date_from = request.args.get('date_from')
@@ -530,7 +542,95 @@ def get_all_payment_history():
     
     return jsonify({"payment_history": payment_history}), 200
 
+@bp.route("/export/csv", methods=["GET"])
+@require_permission_jwt('suppliers', 'read')
+def export_suppliers_csv():
+    try:
+        suppliers = Supplier.query.all()
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'ID', 'Name', 'Contact Person', 'Phone', 'Alternate Phone', 
+            'Email', 'Address', 'GST Number', 'Payment Terms', 
+            'Bank Details', 'Notes', 'Created At', 'Updated At'
+        ])
+        
+        # Write data
+        for supplier in suppliers:
+            writer.writerow([
+                supplier.id,
+                supplier.name or '',
+                supplier.contact_person or '',
+                supplier.phone or '',
+                supplier.alternate_phone or '',
+                supplier.email or '',
+                supplier.address or '',
+                supplier.gst_number or '',
+                supplier.payment_terms or '',
+                str(supplier.bank_details) if supplier.bank_details else '',
+                supplier.notes or '',
+                supplier.created_at.strftime('%Y-%m-%d %H:%M:%S') if supplier.created_at else '',
+                supplier.updated_at.strftime('%Y-%m-%d %H:%M:%S') if supplier.updated_at else ''
+            ])
+        
+        output.seek(0)
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=suppliers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        
+        return response
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/export/excel", methods=["GET"])
+@require_permission_jwt('suppliers', 'read')
+def export_suppliers_excel():
+    try:
+        import pandas as pd
+        
+        suppliers = Supplier.query.all()
+        
+        data = []
+        for supplier in suppliers:
+            data.append({
+                'ID': supplier.id,
+                'Name': supplier.name or '',
+                'Contact Person': supplier.contact_person or '',
+                'Phone': supplier.phone or '',
+                'Alternate Phone': supplier.alternate_phone or '',
+                'Email': supplier.email or '',
+                'Address': supplier.address or '',
+                'GST Number': supplier.gst_number or '',
+                'Payment Terms': supplier.payment_terms or '',
+                'Bank Details': str(supplier.bank_details) if supplier.bank_details else '',
+                'Notes': supplier.notes or '',
+                'Created At': supplier.created_at.strftime('%Y-%m-%d %H:%M:%S') if supplier.created_at else '',
+                'Updated At': supplier.updated_at.strftime('%Y-%m-%d %H:%M:%S') if supplier.updated_at else ''
+            })
+        
+        df = pd.DataFrame(data)
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Suppliers', index=False)
+        
+        output.seek(0)
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=suppliers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+    except ImportError:
+        return jsonify({"error": "pandas and openpyxl are required for Excel export"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @bp.route("/<int:supplier_id>", methods=["PUT"])
+@require_permission_jwt('suppliers', 'write')
+@audit_decorator('suppliers', 'UPDATE')
 def update_supplier(supplier_id):
     s = Supplier.query.get(supplier_id)
     if not s:
@@ -551,6 +651,22 @@ def update_supplier(supplier_id):
         
         db.session.commit()
         return jsonify({"id": s.id, "name": s.name, "phone": s.phone}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@bp.route("/<int:supplier_id>", methods=["DELETE"])
+@require_permission_jwt('suppliers', 'write')
+@audit_decorator('suppliers', 'DELETE')
+def delete_supplier(supplier_id):
+    s = Supplier.query.get(supplier_id)
+    if not s:
+        return jsonify({"error": "Supplier not found"}), 404
+    
+    try:
+        db.session.delete(s)
+        db.session.commit()
+        return jsonify({"message": "Supplier deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400

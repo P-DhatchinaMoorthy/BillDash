@@ -1,13 +1,14 @@
 # services/sale_no_invoice_service.py
 from decimal import Decimal
-from extensions import db
+from src.extensions import db
 from sales_no_invoice.sale_no_invoice import SaleNoInvoice
 from products.product import Product
+from customers.customer import Customer
 from stock_transactions.stock_transaction import StockTransaction
 
 class SaleNoInvoiceService:
     @staticmethod
-    def create_sale(product_id, quantity, discount_percentage, payment_method, notes=None):
+    def create_sale(product_id, quantity, discount_percentage, payment_method, customer_id=None, notes=None):
         """
         Create a sale without invoice:
          - fetch product and its selling_price
@@ -41,6 +42,7 @@ class SaleNoInvoiceService:
             discount_amount=discount_amt,
             amount_after_discount=amount_after_discount,
             payment_method=payment_method,
+            customer_id=customer_id,
             notes=notes,
         )
         db.session.add(sale)

@@ -53,11 +53,12 @@ def register_routes(app):
     except ImportError as e:
         print(f"Failed to import purchase_routes: {e}")
     
-    try:
-        from sales.sales_routes import bp as sales_bp
-        app.register_blueprint(sales_bp, url_prefix="/sales")
-    except ImportError as e:
-        print(f"Failed to import sales_routes: {e}")
+    # Sales module removed
+    # try:
+    #     from sales.sales_routes import bp as sales_bp
+    #     app.register_blueprint(sales_bp, url_prefix="/sales")
+    # except ImportError as e:
+    #     print(f"Failed to import sales_routes: {e}")
     
     try:
         from purchases.purchase_billing_routes import bp as purchase_billing_bp
@@ -78,6 +79,12 @@ def register_routes(app):
         print(f"Failed to import return_routes: {e}")
     
     try:
+        from damage.damage_routes import damage_bp
+        app.register_blueprint(damage_bp, url_prefix="/damage")
+    except ImportError as e:
+        print(f"Failed to import damage_routes: {e}")
+    
+    try:
         from user.user_routes import bp as user_bp
         app.register_blueprint(user_bp, url_prefix="")
     except ImportError as e:
@@ -94,3 +101,15 @@ def register_routes(app):
         app.register_blueprint(mail_bp, url_prefix="")
     except ImportError as e:
         print(f"Failed to import mail_routes: {e}")
+    
+    try:
+        from user.password_reset_routes import bp as password_reset_bp
+        app.register_blueprint(password_reset_bp, url_prefix="")
+    except ImportError as e:
+        print(f"Failed to import password_reset_routes: {e}")
+    
+    try:
+        from user.audit_routes import bp as audit_bp
+        app.register_blueprint(audit_bp, url_prefix="/admin")
+    except ImportError as e:
+        print(f"Failed to import audit_routes: {e}")

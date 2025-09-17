@@ -25,7 +25,14 @@ def require_permission_jwt(module, action=None):
                 # Log admin action
                 action_name = action or request.method.lower()
                 record_id = kwargs.get('id') or kwargs.get('customer_id') or kwargs.get('user_id')
-                log_user_action(action_name.upper(), module, record_id, None, request.get_json())
+                # Safely get JSON data (None if not JSON request)
+                json_data = None
+                try:
+                    if request.is_json:
+                        json_data = request.get_json()
+                except:
+                    pass
+                log_user_action(action_name.upper(), module, record_id, None, json_data)
                 return result
             
             # Auto-detect action from HTTP method if not specified
@@ -64,7 +71,14 @@ def require_permission_jwt(module, action=None):
             
             # Log successful action
             record_id = kwargs.get('id') or kwargs.get('customer_id') or kwargs.get('user_id')
-            log_user_action(detected_action.upper(), module, record_id, None, request.get_json())
+            # Safely get JSON data (None if not JSON request)
+            json_data = None
+            try:
+                if request.is_json:
+                    json_data = request.get_json()
+            except:
+                pass
+            log_user_action(detected_action.upper(), module, record_id, None, json_data)
             
             return result
         return decorated_function

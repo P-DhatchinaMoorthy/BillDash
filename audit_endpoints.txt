@@ -1,0 +1,40 @@
+Audit Log API Endpoints
+
+1. Get all audit logs with filtering:
+http://localhost:5000/admin/audit-logs/
+
+2. Get audit logs by specific user ID:
+http://localhost:5000/admin/audit-logs/user/5/
+
+3. Get audit logs by username:
+http://localhost:5000/admin/audit-logs/username/manager_john/
+
+4. Get audit logs by module:
+http://localhost:5000/admin/audit-logs/module/customers/
+
+5. Get audit logs by user role:
+http://localhost:5000/admin/audit-logs/role/manager/
+
+6. Get audit logs by specific date:
+http://localhost:5000/admin/audit-logs/date/2024-01-15/
+
+7. Get audit logs summary:
+http://localhost:5000/admin/audit-logs/summary/
+
+8. Export audit logs (CSV):
+http://localhost:5000/admin/audit-logs/export/?format=csv
+
+9. Export audit logs (Excel):
+http://localhost:5000/admin/audit-logs/export/?format=excel
+
+Query Parameters (for all endpoints):
+- page=1 (pagination)
+- per_page=20 (items per page)
+
+Additional filters for main endpoint:
+- module=customers
+- action=CREATE
+- user_id=5
+- date_from=2024-01-01
+- date_to=2024-01-31
+

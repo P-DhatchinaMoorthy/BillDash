@@ -1,17 +1,20 @@
 from flask import Blueprint, request, jsonify
 from src.extensions import db
 from settings.company_settings import Settings
-from user.auth_bypass import require_permission
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
 
 bp = Blueprint("settings", __name__)
 
 @bp.route("/", methods=["GET"])
+@require_permission_jwt('settings', 'read')
 def get_settings():
     settings = Settings.query.first()
     if not settings:
         return jsonify({"message": "No settings found"}), 404
     
     return jsonify({
+        "id": settings.id,
         "business_name": settings.business_name,
         "business_type": settings.business_type,
         "registration_number": settings.registration_number,
@@ -30,10 +33,18 @@ def get_settings():
         "city": settings.city,
         "state": settings.state,
         "postal_code": settings.postal_code,
-        "country": settings.country
+        "country": settings.country,
+        "bank_name": settings.bank_name,
+        "account_number": settings.account_number,
+        "ifsc_code": settings.ifsc_code,
+        "branch": settings.branch,
+        "created_at": settings.created_at.isoformat() if settings.created_at else None,
+        "updated_at": settings.updated_at.isoformat() if settings.updated_at else None
     }), 200
 
 @bp.route("/", methods=["POST"])
+@require_permission_jwt('settings', 'write')
+@audit_decorator('settings', 'CREATE')
 def create_settings():
     # Check if settings already exist
     if Settings.query.first():
@@ -51,6 +62,8 @@ def create_settings():
     return jsonify({"message": "Settings created successfully"}), 201
 
 @bp.route("/", methods=["PUT"])
+@require_permission_jwt('settings', 'write')
+@audit_decorator('settings', 'UPDATE')
 def update_settings():
     data = request.get_json() or {}
     

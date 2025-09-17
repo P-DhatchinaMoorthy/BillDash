@@ -25,8 +25,13 @@ class InvoiceService:
          - calculates totals
          - deducts stock and creates stock transactions
         """
+        # Get next invoice ID to generate invoice number
+        last_invoice = Invoice.query.order_by(Invoice.id.desc()).first()
+        next_id = (last_invoice.id + 1) if last_invoice else 4001
+        
         invoice = Invoice(
             customer_id=customer_id,
+            invoice_number=InvoiceService._generate_invoice_number(next_id),
             payment_terms=payment_terms,
             currency=currency,
             notes=notes,
@@ -36,7 +41,6 @@ class InvoiceService:
         )
         db.session.add(invoice)
         db.session.flush()
-        invoice.invoice_number = InvoiceService._generate_invoice_number(invoice.id)
 
         total_before_tax = Decimal("0.00")
         total_tax = Decimal("0.00")

@@ -1,0 +1,31 @@
+DAMAGE MODULE API ENDPOINTS
+===========================
+
+1. POST /damage/return-to-supplier/
+   - Return damaged product to supplier
+   - Required: damaged_product_id, return_type ("refund" or "replacement")
+   - Optional: notes
+   - Updates damaged product status to "Returned to Supplier"
+
+2. GET /damage/supplier-returns/
+   - Get all supplier returns with details
+   - Returns list of all products returned to suppliers
+
+SAMPLE REQUEST:
+===============
+
+POST /damage/return-to-supplier/
+{
+  "damaged_product_id": 1,
+  "return_type": "refund",
+  "notes": "Product severely damaged, requesting refund"
+}
+
+RESPONSE:
+=========
+{
+  "message": "Damaged product returned to supplier for refund",
+  "supplier_return_id": 1,
+  "return_number": "SR-20241201-0001",
+  "refund_amount": "150.00"
+}

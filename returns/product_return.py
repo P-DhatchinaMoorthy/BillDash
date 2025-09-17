@@ -82,7 +82,7 @@ class ProductReturn(db.Model):
 class DamagedProduct(db.Model):
     __tablename__ = "damaged_products"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=False)
     product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
     return_id = db.Column(db.Integer, db.ForeignKey("product_returns.id"), nullable=True)
     
@@ -108,3 +108,11 @@ class DamagedProduct(db.Model):
     # Relationships
     product = relationship("Product")
     return_record = relationship("ProductReturn")
+
+    def __init__(self, **kwargs):
+        if 'id' not in kwargs:
+            # Get next damaged product ID starting from 6001
+            last_damaged = DamagedProduct.query.order_by(DamagedProduct.id.desc()).first()
+            kwargs['id'] = (last_damaged.id + 1) if last_damaged and last_damaged.id >= 6001 else 6006
+        
+        super().__init__(**kwargs)

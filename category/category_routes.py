@@ -1,14 +1,18 @@
-from flask import Blueprint, request, jsonify
-from extensions import db
+from flask import Blueprint, request, jsonify, send_file
+from src.extensions import db
 from category.category import Category
-from user.auth_bypass import require_permission
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
 import io
 import pandas as pd
+from datetime import datetime
 
 bp = Blueprint("categories", __name__)
 
 
 @bp.route("/", methods=["POST"])
+@require_permission_jwt('categories', 'write')
+@audit_decorator('categories', 'CREATE')
 def create_category():
     data = request.get_json() or {}
     if not data.get("name"):
@@ -35,6 +39,7 @@ def create_category():
 
 
 @bp.route("/", methods=["GET"])
+@require_permission_jwt('categories', 'read')
 def list_categories():
     cats = Category.query.all()
     return jsonify([
@@ -53,6 +58,7 @@ def list_categories():
 
 
 @bp.route("/<int:category_id>", methods=["GET"])
+@require_permission_jwt('categories', 'read')
 def get_category(category_id):
     # Check categories first
     c = Category.query.get(category_id)
@@ -90,6 +96,8 @@ def get_category(category_id):
 
 
 @bp.route("/<int:category_id>", methods=["PUT"])
+@require_permission_jwt('categories', 'write')
+@audit_decorator('categories', 'UPDATE')
 def update_category(category_id):
     c = Category.query.get(category_id)
     if not c:
@@ -107,6 +115,8 @@ def update_category(category_id):
 
 
 @bp.route("/bulk", methods=["POST"])
+@require_permission_jwt('categories', 'write')
+@audit_decorator('categories', 'BULK_IMPORT')
 def bulk_upload():
     try:
         if 'file' not in request.files:
@@ -190,3 +200,95 @@ def bulk_upload():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/export/excel", methods=["GET"])
+@require_permission_jwt('categories', 'read')
+@audit_decorator('categories', 'EXPORT_EXCEL')
+def export_categories_excel():
+    try:
+        cats = Category.query.all()
+        data = []
+        for c in cats:
+            data.append({
+                "ID": c.id,
+                "Name": c.name,
+                "Description": c.description,
+                "Subcategory ID": c.subcategory_id,
+                "Subcategory Name": c.subcategory_name,
+                "HSN Code": c.hsn_code,
+                "CGST Rate": float(c.cgst_rate) if c.cgst_rate else 0,
+                "SGST Rate": float(c.sgst_rate) if c.sgst_rate else 0,
+                "IGST Rate": float(c.igst_rate) if c.igst_rate else 0,
+                "Created At": c.created_at.strftime('%Y-%m-%d %H:%M:%S') if c.created_at else ''
+            })
+        
+        df = pd.DataFrame(data)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Categories')
+        output.seek(0)
+        
+        filename = f"categories_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/export/csv", methods=["GET"])
+@require_permission_jwt('categories', 'read')
+@audit_decorator('categories', 'EXPORT_CSV')
+def export_categories_csv():
+    try:
+        cats = Category.query.all()
+        data = []
+        for c in cats:
+            data.append({
+                "ID": c.id,
+                "Name": c.name,
+                "Description": c.description,
+                "Subcategory ID": c.subcategory_id,
+                "Subcategory Name": c.subcategory_name,
+                "HSN Code": c.hsn_code,
+                "CGST Rate": float(c.cgst_rate) if c.cgst_rate else 0,
+                "SGST Rate": float(c.sgst_rate) if c.sgst_rate else 0,
+                "IGST Rate": float(c.igst_rate) if c.igst_rate else 0,
+                "Created At": c.created_at.strftime('%Y-%m-%d %H:%M:%S') if c.created_at else ''
+            })
+        
+        df = pd.DataFrame(data)
+        output = io.StringIO()
+        df.to_csv(output, index=False)
+        output.seek(0)
+        
+        filename = f"categories_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/<int:category_id>", methods=["DELETE"])
+@require_permission_jwt('categories', 'write')
+@audit_decorator('categories', 'DELETE')
+def delete_category(category_id):
+    c = Category.query.get(category_id)
+    if not c:
+        return jsonify({"error": "Category not found"}), 404
+    
+    try:
+        db.session.delete(c)
+        db.session.commit()
+        return jsonify({"message": "Category deleted successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400

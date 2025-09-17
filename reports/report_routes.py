@@ -8,12 +8,13 @@ from invoices.invoice import Invoice
 from customers.customer import Customer
 from payments.payment import Payment
 from sales_no_invoice.sale_no_invoice import SaleNoInvoice
-from user.auth_bypass import require_permission
+from user.enhanced_auth_middleware import require_permission_jwt
 from sqlalchemy import func, desc
 
 bp = Blueprint("reports", __name__)
 
 @bp.route("/sales", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_sales_report():
     try:
         report_data = ReportService.generate_sales_report()
@@ -22,6 +23,7 @@ def get_sales_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/stock", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_stock_report():
     try:
         report_data = ReportService.generate_stock_report()
@@ -30,6 +32,7 @@ def get_stock_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/profit-loss", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_profit_loss_report():
     try:
         # Get date parameters from query string
@@ -47,6 +50,7 @@ def get_profit_loss_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/dashboard-test", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_dashboard_test():
     try:
         # Simple test to check if data exists
@@ -67,6 +71,7 @@ def get_dashboard_test():
 
 
 @bp.route("/dashboard", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_dashboard_report():
     products_count = Product.query.count()
     customers_count = Customer.query.count()
@@ -119,6 +124,7 @@ def get_dashboard_report():
     }), 200
 
 @bp.route("/", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def list_reports():
     try:
         total_products = Product.query.count()
@@ -151,6 +157,7 @@ def list_reports():
     ]), 200
 
 @bp.route("/sales-no-invoice", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_sales_no_invoice_report():
     try:
         sales = SaleNoInvoice.query.all()
@@ -179,6 +186,7 @@ def get_sales_no_invoice_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/invoices", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_invoices_report():
     try:
         invoices = Invoice.query.all()
@@ -251,6 +259,7 @@ def get_invoices_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/purchases", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_purchases_report():
     try:
         from models.purchase_bill import PurchaseBill
@@ -279,6 +288,7 @@ def get_purchases_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/stock-movement", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_stock_movement_report():
     try:
         location = request.args.get('location')
@@ -409,6 +419,7 @@ def get_stock_movement_report():
 
 
 @bp.route("/reorder", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def get_reorder_report():
     try:
         from category.category import Category
@@ -461,6 +472,7 @@ def get_reorder_report():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/debug/locations", methods=["GET"])
+@require_permission_jwt('reports', 'read')
 def debug_locations():
     """Debug endpoint to check available customer locations"""
     try:
@@ -509,6 +521,7 @@ def debug_locations():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/generate", methods=["POST"])
+@require_permission_jwt('reports', 'write')
 def generate_report():
     data = request.get_json() or {}
     report_type = data.get("report_type")
@@ -533,4 +546,18 @@ def generate_report():
         }), 201
         
     except Exception as e:
+        return jsonify({"error": str(e)}), 400
+@bp.route("/<int:report_id>", methods=["DELETE"])
+@require_permission_jwt('reports', 'write')
+def delete_report(report_id):
+    r = Report.query.get(report_id)
+    if not r:
+        return jsonify({"error": "Report not found"}), 404
+    
+    try:
+        db.session.delete(r)
+        db.session.commit()
+        return jsonify({"message": "Report deleted successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 400

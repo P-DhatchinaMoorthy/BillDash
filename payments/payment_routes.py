@@ -1,14 +1,21 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file, make_response
 from decimal import Decimal
 from src.extensions import db
 from payments.payment_service import PaymentService
-from user.auth_bypass import require_permission
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
+import pandas as pd
+import io
+from datetime import datetime
 
 bp = Blueprint("payments", __name__)
 
 @bp.route("/direct-sale", methods=["POST"])
+@require_permission_jwt('payments', 'write')
+@audit_decorator('payments', 'DIRECT_SALE')
 def direct_sale():
     from sales.direct_sales_service import DirectSalesService
+
     payload = request.get_json() or {}
     customer_id = payload.get("customer_id")
     customer_name = payload.get("customer_name")
@@ -37,6 +44,8 @@ def direct_sale():
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/", methods=["POST"])
+@require_permission_jwt('payments', 'write')
+@audit_decorator('payments', 'CREATE')
 def create_payment():
     payload = request.get_json() or {}
     invoice_id = payload.get("invoice_id")
@@ -61,6 +70,7 @@ def create_payment():
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def list_payments():
     from payments.payment import Payment
     from decimal import Decimal
@@ -85,7 +95,7 @@ def list_payments():
             "payment_date": p.payment_date.isoformat(),
             "payment_method": p.payment_method,
             "amount_before_discount": str(p.amount_before_discount),
-            "discount_amount": str(p.discount_amount),
+            # "discount_amount": str(p.discount_amount),
             "amount_paid": str(p.amount_paid),
             "balance_amount": str(p.balance_amount),
             "excess_amount": str(p.excess_amount),
@@ -94,6 +104,7 @@ def list_payments():
     return jsonify(result), 200
 
 @bp.route("/<payment_id>", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_payment(payment_id):
     from payments.payment import Payment
     from customers.customer import Customer
@@ -134,8 +145,8 @@ def get_payment(payment_id):
             "payment_date": p.payment_date.isoformat(),
             "payment_method": p.payment_method,
             "amount_before_discount": str(p.amount_before_discount),
-            "discount_percentage": str(p.discount_percentage),
-            "discount_amount": str(p.discount_amount),
+            "discount_percentage": str(getattr(p, 'discount_percentage', 0)),
+            "discount_amount": str(getattr(p, 'discount_amount', 0)),
             "amount_paid": str(p.amount_paid),
             "balance_amount": str(p.balance_amount),
             "excess_amount": str(p.excess_amount),
@@ -146,6 +157,8 @@ def get_payment(payment_id):
     }), 200
 
 @bp.route("/<payment_id>", methods=["PUT"])
+@require_permission_jwt('payments', 'write')
+@audit_decorator('payments', 'UPDATE')
 def update_payment(payment_id):
     from payments.payment import Payment
     payment = Payment.query.get(payment_id)
@@ -161,7 +174,8 @@ def update_payment(payment_id):
             payment.amount_paid = current_paid + additional_amount
         
         payment.payment_method = data.get("payment_method", payment.payment_method)
-        payment.discount_percentage = data.get("discount_percentage", payment.discount_percentage)
+        if hasattr(payment, 'discount_percentage'):
+            payment.discount_percentage = data.get("discount_percentage", payment.discount_percentage)
         payment.bank_details = data.get("bank_details", payment.bank_details)
         payment.transaction_reference = data.get("transaction_reference", payment.transaction_reference)
         payment.notes = data.get("notes", payment.notes)
@@ -184,6 +198,8 @@ def update_payment(payment_id):
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/<int:invoice_id>", methods=["POST"])
+@require_permission_jwt('payments', 'write')
+@audit_decorator('payments', 'PROCESS')
 def process_payment_by_invoice(invoice_id):
     from payments.payment import Payment
     from invoices.invoice import Invoice
@@ -207,7 +223,8 @@ def process_payment_by_invoice(invoice_id):
         payment.amount_paid = current_paid + new_amount
         
         payment.payment_method = payment_method
-        payment.discount_percentage = data.get("discount_percentage", payment.discount_percentage)
+        if hasattr(payment, 'discount_percentage'):
+            payment.discount_percentage = data.get("discount_percentage", payment.discount_percentage)
         payment.bank_details = data.get("bank_details")
         payment.transaction_reference = data.get("transaction_reference")
         payment.notes = data.get("notes")
@@ -229,6 +246,7 @@ def process_payment_by_invoice(invoice_id):
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/invoice/<invoice_id>/details", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_detailed_invoice(invoice_id):
     try:
         invoice_details = PaymentService.get_detailed_invoice(invoice_id)
@@ -240,6 +258,7 @@ def get_detailed_invoice(invoice_id):
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 400
 
 @bp.route("/invoice/<invoice_id>/details/index.html", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_invoice_html(invoice_id):
     try:
         from jinja2 import Environment, FileSystemLoader
@@ -262,6 +281,7 @@ def get_invoice_html(invoice_id):
         return f"Error: {str(e)}", 400
 
 @bp.route("/outstanding", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_outstanding_payments():
     """Get all outstanding payments with filters"""
     from payments.payment import Payment
@@ -320,6 +340,7 @@ def get_outstanding_payments():
     }), 200
 
 @bp.route("/outstanding/customers", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_customer_wise_outstanding():
     """Get outstanding amounts grouped by customer"""
     from payments.payment import Payment
@@ -398,6 +419,7 @@ def get_customer_wise_outstanding():
     }), 200
 
 @bp.route("/records", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_payment_records():
     """Enhanced payment records with filtering"""
     from payments.payment import Payment
@@ -460,7 +482,7 @@ def get_payment_records():
             "payment_date": payment.payment_date.isoformat(),
             "payment_method": payment.payment_method,
             "amount_before_discount": str(payment.amount_before_discount),
-            "discount_amount": str(payment.discount_amount),
+            "discount_amount": str(getattr(payment, 'discount_amount', 0)),
             "amount_paid": str(payment.amount_paid),
             "balance_amount": str(payment.balance_amount),
             "payment_status": payment.payment_status,
@@ -480,6 +502,7 @@ def get_payment_records():
     }), 200
 
 @bp.route("/reminders", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_payment_reminders():
     """Get payment reminders for overdue invoices"""
     from invoices.invoice import Invoice
@@ -523,6 +546,7 @@ def get_payment_reminders():
     }), 200
 
 @bp.route("/receipt/<payment_id>", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def generate_receipt(payment_id):
     """Generate payment receipt"""
     try:
@@ -534,6 +558,7 @@ def generate_receipt(payment_id):
         return jsonify({"error": str(e)}), 400
 
 @bp.route("/summary", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_payment_summary():
     """Get payment summary statistics"""
     try:
@@ -542,6 +567,7 @@ def get_payment_summary():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 @bp.route("/customer-outstanding/", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_customer_outstanding_payments():
     try:
         from customers.customer import Customer
@@ -594,6 +620,7 @@ def get_customer_outstanding_payments():
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/payment-reminders/", methods=["GET"])
+@require_permission_jwt('payments', 'read')
 def get_payment_reminders_payments():
     try:
         from datetime import datetime
@@ -640,3 +667,94 @@ def get_payment_reminders_payments():
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/export", methods=["GET"])
+@require_permission_jwt('payments', 'read')
+def export_payments():
+    try:
+        format_type = request.args.get('format', 'csv').lower()
+        
+        from payments.payment import Payment
+        from customers.customer import Customer
+        from invoices.invoice import Invoice
+        
+        payments = Payment.query.all()
+        data = []
+        
+        for p in payments:
+            customer = Customer.query.get(p.customer_id) if p.customer_id else None
+            invoice = Invoice.query.get(p.invoice_id) if p.invoice_id else None
+            
+            balance = Decimal(p.balance_amount or 0)
+            amount_paid = Decimal(p.amount_paid or 0)
+            
+            if balance <= 0 and amount_paid > 0:
+                status = "Successful"
+            elif amount_paid > 0:
+                status = "Partially Paid"
+            else:
+                status = "Pending"
+            
+            data.append({
+                "Payment ID": p.id,
+                "Invoice ID": p.invoice_id,
+                "Invoice Number": invoice.invoice_number if invoice else '',
+                "Customer Name": customer.contact_person if customer else '',
+                "Business Name": customer.business_name if customer else '',
+                "Phone": customer.phone if customer else '',
+                "Email": customer.email if customer else '',
+                "Payment Date": p.payment_date.strftime('%Y-%m-%d %H:%M:%S'),
+                "Payment Method": p.payment_method,
+                "Amount Before Discount": float(p.amount_before_discount or 0),
+                "Discount Percentage": float(getattr(p, 'discount_percentage', 0)),
+                "Discount Amount": float(getattr(p, 'discount_amount', 0)),
+                "Amount Paid": float(p.amount_paid or 0),
+                "Balance Amount": float(p.balance_amount or 0),
+                "Excess Amount": float(p.excess_amount or 0),
+                "Payment Status": status,
+                "Transaction Reference": p.transaction_reference or '',
+                "Bank Details": p.bank_details or '',
+                "Notes": getattr(p, 'notes', '') or ''
+            })
+        
+        df = pd.DataFrame(data)
+        
+        if format_type == 'excel':
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Payments', index=False)
+            output.seek(0)
+            
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=f'payments_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            )
+        else:
+            output = io.StringIO()
+            df.to_csv(output, index=False)
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            response.headers['Content-Disposition'] = f'attachment; filename=payments_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            return response
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+@bp.route("/<int:payment_id>", methods=["DELETE"])
+@require_permission_jwt('payments', 'write')
+@audit_decorator('payments', 'DELETE')
+def delete_payment(payment_id):
+    from payments.payment import Payment
+    p = Payment.query.get(payment_id)
+    if not p:
+        return jsonify({"error": "Payment not found"}), 404
+    
+    try:
+        db.session.delete(p)
+        db.session.commit()
+        return jsonify({"message": "Payment deleted successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400

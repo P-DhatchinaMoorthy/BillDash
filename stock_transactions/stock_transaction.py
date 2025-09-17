@@ -1,4 +1,3 @@
-# models/stock_transaction.py
 from datetime import datetime
 from src.extensions import db
 import uuid

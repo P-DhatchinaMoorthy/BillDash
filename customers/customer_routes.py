@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify, send_file, make_response
-from extensions import db
+from src.extensions import db
 from customers.customer import Customer
-from user.auth_middleware import require_permission
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
 import pandas as pd
 import io
 import os
@@ -28,6 +29,8 @@ def handle_options():
 
 # -------------------- CREATE CUSTOMER --------------------
 @bp.route("/", methods=["POST", "OPTIONS"])
+@require_permission_jwt('customers', 'write')
+@audit_decorator('customers', 'CREATE', 'customer')
 def create_customer():
     if request.content_type and 'multipart/form-data' in request.content_type:
         data = request.form.to_dict()
@@ -86,6 +89,7 @@ def create_customer():
 
 # -------------------- LIST CUSTOMERS --------------------
 @bp.route("/", methods=["GET", "OPTIONS"])
+@require_permission_jwt('customers', 'read')
 def list_customers():
     page = int(request.args.get('page', 1))
     per_page = 10
@@ -151,6 +155,7 @@ def list_customers():
 
 # -------------------- GET CUSTOMER --------------------
 @bp.route("/<customer_id>", methods=["GET", "OPTIONS"])
+@require_permission_jwt('customers', 'read')
 def get_customer(customer_id):
     try:
         customer_id = int(customer_id)
@@ -183,6 +188,8 @@ def get_customer(customer_id):
 
 # -------------------- UPDATE CUSTOMER --------------------
 @bp.route("/<customer_id>", methods=["PUT", "OPTIONS"])
+@require_permission_jwt('customers', 'write')
+@audit_decorator('customers', 'UPDATE', 'customer')
 def update_customer(customer_id):
     try:
         customer_id = int(customer_id)
@@ -314,6 +321,7 @@ def get_customer_invoices(customer_id):
 
 # -------------------- EXPORT CUSTOMERS --------------------
 @bp.route("/export", methods=["GET", "OPTIONS"])
+@require_permission_jwt('customers', 'read')
 def export_customers():
     try:
         format_type = request.args.get('format', 'csv').lower()
@@ -397,3 +405,25 @@ def bulk_import_customers():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/<customer_id>", methods=["DELETE", "OPTIONS"])
+@require_permission_jwt('customers', 'write')
+@audit_decorator('customers', 'DELETE', 'customer')
+def delete_customer(customer_id):
+    try:
+        customer_id = int(customer_id)
+    except ValueError:
+        return jsonify({"error": "Invalid customer ID"}), 400
+
+    c = Customer.query.get(customer_id)
+    if not c:
+        return jsonify({"error": "Customer not found"}), 404
+    
+    try:
+        db.session.delete(c)
+        db.session.commit()
+        return jsonify({"message": "Customer deleted successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400

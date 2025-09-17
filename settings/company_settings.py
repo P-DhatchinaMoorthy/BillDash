@@ -33,5 +33,11 @@ class Settings(db.Model):
     postal_code = db.Column(db.String(20), nullable=True)
     country = db.Column(db.String(100), nullable=True)
     
+    # Bank Details
+    bank_name = db.Column(db.String(255), nullable=True)
+    account_number = db.Column(db.String(50), nullable=True)
+    ifsc_code = db.Column(db.String(20), nullable=True)
+    branch = db.Column(db.String(255), nullable=True)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)

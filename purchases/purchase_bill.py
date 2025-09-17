@@ -1,6 +1,6 @@
 # models/purchase_bill.py
 from datetime import datetime
-from extensions import db
+from src.extensions import db
 from sqlalchemy.dialects.postgresql import JSON
 
 class PurchaseBill(db.Model):

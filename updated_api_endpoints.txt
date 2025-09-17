@@ -1,0 +1,196 @@
+USER AUTHENTICATION ENDPOINTS (ALL USERS INCLUDING ADMIN REQUIRE 2FA)
+
+POST http://localhost:5000/login/
+Request:
+{
+  "email": "admin@example.com",
+  "password": "password123"
+}
+Response:
+{
+  "success": true,
+  "requires_2fa": true,
+  "temp_token": "550e8400-e29b-41d4-a716-446655440000",
+  "message": "OTP sent to your email"
+}
+
+POST http://localhost:5000/verify-2fa
+Request:
+{
+  "temp_token": "550e8400-e29b-41d4-a716-446655440000",
+  "otp": "123456"
+}
+Response:
+{
+  "success": true,
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "access_expires_in": 86400,
+  "refresh_expires_in": 604800,
+  "token_type": "Bearer",
+  "user": {
+    "user_id": 1,
+    "username": "admin_user",
+    "role": "admin"
+  }
+}
+
+POST http://localhost:5000/resend-otp
+Request:
+{
+  "temp_token": "550e8400-e29b-41d4-a716-446655440000"
+}
+Response:
+{
+  "success": true,
+  "message": "OTP resent"
+}
+
+PASSWORD RESET ENDPOINTS (FOR ALL USERS INCLUDING ADMIN)
+
+POST http://localhost:5000/forgot-password
+Request:
+{
+  "email": "admin@example.com"
+}
+Response:
+{
+  "success": true,
+  "message": "Password reset OTP sent to your email"
+}
+
+POST http://localhost:5000/verify-reset-otp
+Request:
+{
+  "otp": "123456"
+}
+Response:
+{
+  "success": true,
+  "reset_token": "550e8400-e29b-41d4-a716-446655440001",
+  "message": "OTP verified successfully"
+}
+
+POST http://localhost:5000/password/reset
+Request:
+{
+  "reset_token": "550e8400-e29b-41d4-a716-446655440001",
+  "new_password": "newpassword123",
+  "confirm_password": "newpassword123"
+}
+Response:
+{
+  "success": true,
+  "message": "Password reset successfully"
+}
+
+Note: After successful password reset, the system automatically sends an acknowledgment email to the user containing:
+- Confirmation that password was reset successfully
+- Reset timestamp
+- Login URL
+- Security instructions to use the new password for future logins
+
+ADMIN USER MANAGEMENT ENDPOINTS
+
+POST http://localhost:5000/admin/create_user
+Headers: Authorization: Bearer <access_token>
+Request:
+{
+  "username": "Nikhilesh",
+  "email": "nikhilesh1363@gmail.com",
+  "password": "password123",
+  "role": "manager",
+  "permissions": {
+    "customers": {
+      "read": false,
+      "write": false,
+      "delete": false
+    },
+    "suppliers": {
+      "read": false,
+      "write": false,
+      "delete": false
+    },
+    "products": {
+      "read": false,
+      "write": false,
+      "delete": false
+    },
+    "categories": {
+      "read": true,
+      "write": false,
+      "delete": false
+    },
+    "invoices": {
+      "read": false,
+      "write": false,
+      "delete": false
+    },
+    "payments": {
+      "read": true,
+      "write": true,
+      "delete": false
+    },
+    "sales": {
+      "read": true,
+      "write": true,
+      "delete": false
+    },
+    "purchases": {
+      "read": false,
+      "write": false,
+      "delete": false
+    },
+    "reports": {
+      "read": true,
+      "write": true,
+      "delete": false
+    },
+    "returns": {
+      "read": true,
+      "write": true,
+      "delete": false
+    }
+  }
+}
+
+Response:
+{
+  "success": true,
+  "message": "User created successfully. Login credentials sent to user email.",
+  "email_sent": true,
+  "user": {
+    "user_id": 3,
+    "username": "new_user",
+    "email": "newuser@example.com",
+    "role": "user"
+  }
+}
+
+Note: When admin creates a new user with an email address, the system automatically sends an email containing:
+- Username and password
+- Role information
+- Login URL
+- Security instructions (2FA requirement, password change recommendation)
+- The new user can then login using these credentials
+
+PUT http://localhost:5000/admin/reset-password/<user_id>
+Headers: Authorization: Bearer <access_token>
+Request:
+{
+  "new_password": "newpassword123"
+}
+Response:
+{
+  "success": true,
+  "message": "Password reset successfully for user username"
+}
+
+POST http://localhost:5000/admin/generate-temp-password/<user_id>
+Headers: Authorization: Bearer <access_token>
+Request: {}
+Response:
+{
+  "success": true,
+  "message": "Temporary password sent to user@example.com"
+}

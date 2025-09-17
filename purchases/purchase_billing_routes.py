@@ -1,16 +1,23 @@
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, send_file, make_response
 from purchases.purchase_billing_service import PurchaseBillingService
 from purchases.purchase_service import PurchaseService
 from purchases.purchase_bill import PurchaseBill
 from decimal import Decimal
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
 import json
 from jinja2 import Environment, FileSystemLoader
+import pandas as pd
+import io
+from datetime import datetime
 
 bp = Blueprint("purchase_billing", __name__)
 
 @bp.route("/damage/", methods=["POST"])
+@require_permission_jwt('purchases', 'write')
+@audit_decorator('purchases', 'DAMAGE_RECORD')
 def create_damage_record():
-    from extensions import db
+    from src.extensions import db
     from purchases.supplier_damage import SupplierDamage
     from products.product import Product
     
@@ -104,6 +111,7 @@ def create_damage_record():
 
 @bp.route("/damage", methods=["GET"])
 @bp.route("/damage/", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
 def list_damage_records():
     from returns.product_return import DamagedProduct
     from products.product import Product
@@ -130,6 +138,7 @@ def list_damage_records():
 
 
 @bp.route("/damage/<int:damage_id>", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
 def get_damage_details(damage_id):
     from returns.product_return import DamagedProduct
     from products.product import Product
@@ -173,6 +182,7 @@ def get_damage_details(damage_id):
 
 
 @bp.route("/", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
 def list_purchase_bills():
     from stock_transactions.stock_transaction import StockTransaction
     from suppliers.supplier import Supplier
@@ -241,6 +251,7 @@ def list_purchase_bills():
 
 
 @bp.route("/supplier/<int:supplier_id>", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
 def get_purchases_by_supplier(supplier_id):
     from stock_transactions.stock_transaction import StockTransaction
     from suppliers.supplier import Supplier
@@ -316,6 +327,7 @@ def get_purchases_by_supplier(supplier_id):
 
 
 @bp.route("/<int:purchase_id>", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
 def get_purchase_details(purchase_id):
     try:
         purchase_details = PurchaseService.get_purchase_details(purchase_id)
@@ -389,6 +401,8 @@ def get_purchase_details(purchase_id):
 
 
 @bp.route("/return", methods=["POST"])
+@require_permission_jwt('purchases', 'write')
+@audit_decorator('purchases', 'RETURN')
 def process_purchase_return():
     data = request.get_json() or {}
     required = ["purchase_id", "product_id", "quantity", "original_price"]
@@ -420,6 +434,88 @@ def process_purchase_return():
 
 
 @bp.route("/adjustment/", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
+def get_all_adjustment_details():
+    """Get all adjustment details with new product, old product, and supplier information"""
+    from stock_transactions.stock_transaction import StockTransaction
+    from suppliers.supplier import Supplier
+    from products.product import Product
+
+    adjustments = StockTransaction.query.filter_by(transaction_type='Adjustment').all()
+    result = []
+
+    for adjustment in adjustments:
+        supplier = Supplier.query.get(adjustment.supplier_id) if adjustment.supplier_id else None
+        product = Product.query.get(adjustment.product_id) if adjustment.product_id else None
+
+        # Parse notes for old product details
+        old_product_details = None
+        new_product_details = None
+        
+        if adjustment.notes and adjustment.notes.startswith('{'):
+            try:
+                notes_data = json.loads(adjustment.notes)
+                if notes_data.get('exchange_type') == 'product_exchange':
+                    old_product_data = notes_data.get('old_product', {})
+                    new_product_data = notes_data.get('new_product', {})
+                    
+                    old_product_full = Product.query.get(old_product_data.get('product_id')) if old_product_data.get('product_id') else None
+                    new_product_full = Product.query.get(new_product_data.get('product_id')) if new_product_data.get('product_id') else None
+                    
+                    old_product_details = {
+                        "product_id": old_product_data.get('product_id'),
+                        "product_name": old_product_data.get('product_name'),
+                        "sku": old_product_full.sku if old_product_full else None,
+                        "description": old_product_full.description if old_product_full else None,
+                        "purchase_price": old_product_data.get('purchase_price'),
+                        "quantity": old_product_data.get('quantity')
+                    }
+                    
+                    new_product_details = {
+                        "product_id": new_product_data.get('product_id'),
+                        "product_name": new_product_data.get('product_name'),
+                        "sku": new_product_full.sku if new_product_full else None,
+                        "description": new_product_full.description if new_product_full else None,
+                        "purchase_price": new_product_data.get('purchase_price'),
+                        "quantity": new_product_data.get('quantity')
+                    }
+            except:
+                pass
+        
+        # If no exchange data, use current product as new product
+        if not new_product_details and product:
+            new_product_details = {
+                "product_id": product.id,
+                "product_name": product.product_name,
+                "sku": product.sku,
+                "description": product.description,
+                "purchase_price": str(product.purchase_price),
+                "quantity": adjustment.quantity
+            }
+        
+        result.append({
+            "adjustment_id": adjustment.id,
+            "reference_number": adjustment.reference_number,
+            "transaction_date": adjustment.transaction_date.isoformat(),
+            "old_product": old_product_details,
+            "new_product": new_product_details,
+            "supplier_details": {
+                "id": supplier.id,
+                "name": supplier.name,
+                "contact_person": supplier.contact_person,
+                "email": supplier.email,
+                "phone": supplier.phone,
+                "address": supplier.address,
+                "gst_number": supplier.gst_number
+            } if supplier else None,
+            "notes": adjustment.notes
+        })
+
+    return jsonify(result), 200
+
+
+@bp.route("/adjustment/list", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
 def list_adjustments():
     from stock_transactions.stock_transaction import StockTransaction
     from suppliers.supplier import Supplier
@@ -480,6 +576,7 @@ def list_adjustments():
 
 
 @bp.route("/adjustment/<int:adjustment_id>", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
 def get_adjustment_details(adjustment_id):
     from stock_transactions.stock_transaction import StockTransaction
     from suppliers.supplier import Supplier
@@ -497,34 +594,63 @@ def get_adjustment_details(adjustment_id):
         try:
             notes_data = json.loads(adjustment.notes)
             if notes_data.get('exchange_type') == 'product_exchange':
-                # Product exchange adjustment
+                # Product exchange adjustment with full details
                 old_product_data = notes_data.get('old_product', {})
                 new_product_data = notes_data.get('new_product', {})
                 difference_amount = Decimal(notes_data.get('difference_amount', '0'))
                 exchange_direction = notes_data.get('exchange_direction', 'no_payment')
                 
+                # Get full product details for old and new products
+                old_product_full = Product.query.get(old_product_data.get('product_id')) if old_product_data.get('product_id') else None
+                new_product_full = Product.query.get(new_product_data.get('product_id')) if new_product_data.get('product_id') else None
+                
                 return jsonify({
                     "adjustment_id": adjustment.id,
                     "reference_number": adjustment.reference_number,
                     "exchange_type": "product_exchange",
-                    "supplier": {
+                    "supplier_details": {
                         "id": supplier.id,
                         "name": supplier.name,
                         "contact_person": supplier.contact_person,
-                        "phone": supplier.phone
+                        "email": supplier.email,
+                        "phone": supplier.phone,
+                        "alternate_phone": supplier.alternate_phone,
+                        "address": supplier.address,
+                        "gst_number": supplier.gst_number,
+                        "payment_terms": supplier.payment_terms,
+                        "bank_details": supplier.bank_details,
+                        "notes": supplier.notes
                     } if supplier else None,
                     "old_product": {
                         "product_id": old_product_data.get('product_id'),
                         "product_name": old_product_data.get('product_name'),
+                        "sku": old_product_full.sku if old_product_full else None,
+                        "description": old_product_full.description if old_product_full else None,
+                        "unit_of_measure": old_product_full.unit_of_measure if old_product_full else None,
+                        "category_id": old_product_full.category_id if old_product_full else None,
+                        "barcode": old_product_full.barcode if old_product_full else None,
+                        "batch_number": old_product_full.batch_number if old_product_full else None,
+                        "expiry_date": old_product_full.expiry_date.isoformat() if old_product_full and old_product_full.expiry_date else None,
                         "quantity": old_product_data.get('quantity'),
                         "purchase_price": old_product_data.get('purchase_price'),
+                        "selling_price": str(old_product_full.selling_price) if old_product_full else None,
+                        "current_stock": old_product_full.quantity_in_stock if old_product_full else None,
                         "total_amount": notes_data.get('old_total')
                     },
                     "new_product": {
                         "product_id": new_product_data.get('product_id'),
                         "product_name": new_product_data.get('product_name'),
+                        "sku": new_product_full.sku if new_product_full else None,
+                        "description": new_product_full.description if new_product_full else None,
+                        "unit_of_measure": new_product_full.unit_of_measure if new_product_full else None,
+                        "category_id": new_product_full.category_id if new_product_full else None,
+                        "barcode": new_product_full.barcode if new_product_full else None,
+                        "batch_number": new_product_full.batch_number if new_product_full else None,
+                        "expiry_date": new_product_full.expiry_date.isoformat() if new_product_full and new_product_full.expiry_date else None,
                         "quantity": new_product_data.get('quantity'),
                         "purchase_price": new_product_data.get('purchase_price'),
+                        "selling_price": str(new_product_full.selling_price) if new_product_full else None,
+                        "current_stock": new_product_full.quantity_in_stock if new_product_full else None,
                         "total_amount": notes_data.get('new_total')
                     },
                     "financial_summary": {
@@ -540,22 +666,39 @@ def get_adjustment_details(adjustment_id):
         except:
             pass
     
-    # Regular adjustment (non-exchange)
+    # Regular adjustment (non-exchange) with full details
     amount = Decimal(str(product.purchase_price)) * abs(adjustment.quantity) if product else Decimal('0')
     return jsonify({
         "adjustment_id": adjustment.id,
         "reference_number": adjustment.reference_number,
-        "supplier": {
+        "supplier_details": {
             "id": supplier.id,
             "name": supplier.name,
             "contact_person": supplier.contact_person,
-            "phone": supplier.phone
+            "email": supplier.email,
+            "phone": supplier.phone,
+            "alternate_phone": supplier.alternate_phone,
+            "address": supplier.address,
+            "gst_number": supplier.gst_number,
+            "payment_terms": supplier.payment_terms,
+            "bank_details": supplier.bank_details,
+            "notes": supplier.notes
         } if supplier else None,
         "product": {
             "id": product.id,
-            "name": product.product_name,
+            "product_name": product.product_name,
             "sku": product.sku,
-            "purchase_price": str(product.purchase_price)
+            "description": product.description,
+            "unit_of_measure": product.unit_of_measure,
+            "category_id": product.category_id,
+            "barcode": product.barcode,
+            "batch_number": product.batch_number,
+            "expiry_date": product.expiry_date.isoformat() if product.expiry_date else None,
+            "purchase_price": str(product.purchase_price),
+            "selling_price": str(product.selling_price),
+            "current_stock": product.quantity_in_stock,
+            "reorder_level": product.reorder_level,
+            "max_stock_level": product.max_stock_level
         } if product else None,
         "quantity": adjustment.quantity,
         "amount": f"{amount:.2f}",
@@ -567,13 +710,15 @@ def get_adjustment_details(adjustment_id):
 
 
 @bp.route("/adjustment", methods=["POST"])
+@require_permission_jwt('purchases', 'write')
+@audit_decorator('purchases', 'ADJUSTMENT')
 def process_purchase_adjustment():
     data = request.get_json() or {}
     required = ["supplier_id", "old_product", "new_product"]
     if not all(field in data for field in required):
         return jsonify({"error": f"Required fields: {required}"}), 400
 
-    from extensions import db
+    from src.extensions import db
     from stock_transactions.stock_transaction import StockTransaction
     from products.product import Product
     import json
@@ -648,6 +793,7 @@ def process_purchase_adjustment():
 
 
 @bp.route("/<int:purchase_id>/purchase.html", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
 def serve_purchase_invoice_html(purchase_id):
     import os
     try:
@@ -659,6 +805,7 @@ def serve_purchase_invoice_html(purchase_id):
         return f"Error loading invoice template: {str(e)}", 400
 
 @bp.route("/<int:purchase_id>/invoice", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
 def generate_purchase_invoice(purchase_id):
     try:
         data = PurchaseService.get_purchase_details(purchase_id)
@@ -702,3 +849,237 @@ def generate_purchase_invoice(purchase_id):
 
     except Exception as e:
         return f"Error generating invoice: {str(e)}", 400
+
+
+@bp.route("/export", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
+def export_purchase_bills():
+    try:
+        format_type = request.args.get('format', 'csv').lower()
+        
+        from stock_transactions.stock_transaction import StockTransaction
+        from suppliers.supplier import Supplier
+        
+        purchases = StockTransaction.query.filter_by(transaction_type='Purchase').all()
+        data = []
+        
+        for p in purchases:
+            supplier = Supplier.query.get(p.supplier_id) if p.supplier_id else None
+            
+            payment_status = "Pending"
+            payment_method = None
+            transaction_reference = None
+            paid_amount = Decimal('0')
+            total_amount = Decimal('0')
+            
+            if p.notes and p.notes.startswith('{'):
+                try:
+                    notes_data = json.loads(p.notes)
+                    payment_status = notes_data.get('payment_status', 'Pending')
+                    payment_method = notes_data.get('payment_method')
+                    transaction_reference = notes_data.get('transaction_reference')
+                    paid_amount = Decimal(notes_data.get('payment_amount', '0'))
+                    total_amount = Decimal(notes_data.get('total_amount', '0'))
+                except:
+                    payment_status = "Pending"
+            
+            if total_amount == 0:
+                total_amount = Decimal(str(p.product.purchase_price)) * Decimal(str(p.quantity)) if p.product else Decimal('0')
+            
+            balance_amount = max(Decimal('0'), total_amount - paid_amount)
+            
+            if balance_amount == 0:
+                payment_status = "Paid"
+            elif paid_amount > 0:
+                payment_status = "Partially Paid"
+            else:
+                payment_status = "Pending"
+            
+            data.append({
+                "Purchase ID": p.id,
+                "Reference Number": p.reference_number,
+                "Supplier ID": p.supplier_id or '',
+                "Supplier Name": supplier.name if supplier else '',
+                "Supplier Contact": supplier.contact_person if supplier else '',
+                "Supplier Phone": supplier.phone if supplier else '',
+                "Product ID": p.product_id,
+                "Product Name": p.product.product_name if p.product else '',
+                "Quantity": p.quantity,
+                "Transaction Date": p.transaction_date.strftime('%Y-%m-%d %H:%M:%S'),
+                "Total Amount": float(total_amount),
+                "Paid Amount": float(paid_amount),
+                "Balance Amount": float(balance_amount),
+                "Payment Status": payment_status,
+                "Payment Method": payment_method or '',
+                "Transaction Reference": transaction_reference or ''
+            })
+        
+        df = pd.DataFrame(data)
+        
+        if format_type == 'excel':
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Purchase Bills', index=False)
+            output.seek(0)
+            
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=f'purchase_bills_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            )
+        else:
+            output = io.StringIO()
+            df.to_csv(output, index=False)
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            response.headers['Content-Disposition'] = f'attachment; filename=purchase_bills_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            return response
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/export-all", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
+def export_purchase_billing_all():
+    try:
+        format_type = request.args.get('format', 'csv').lower()
+        export_type = request.args.get('type', 'all')  # all, adjustments, returns, damage
+        
+        from stock_transactions.stock_transaction import StockTransaction
+        from suppliers.supplier import Supplier
+        from returns.product_return import DamagedProduct
+        from products.product import Product
+        
+        data = []
+        
+        if export_type in ['all', 'adjustments']:
+            # Get adjustments
+            adjustments = StockTransaction.query.filter_by(transaction_type='Adjustment').all()
+            for adj in adjustments:
+                supplier = Supplier.query.get(adj.supplier_id) if adj.supplier_id else None
+                product = Product.query.get(adj.product_id) if adj.product_id else None
+                
+                if adj.notes and adj.notes.startswith('{'):
+                    try:
+                        notes_data = json.loads(adj.notes)
+                        if notes_data.get('exchange_type') == 'product_exchange':
+                            difference_amount = Decimal(notes_data.get('difference_amount', '0'))
+                            exchange_direction = notes_data.get('exchange_direction', 'no_payment')
+                            
+                            data.append({
+                                "Type": "Adjustment",
+                                "ID": adj.id,
+                                "Reference Number": adj.reference_number,
+                                "Supplier ID": adj.supplier_id or '',
+                                "Supplier Name": supplier.name if supplier else '',
+                                "Product ID": adj.product_id,
+                                "Product Name": product.product_name if product else '',
+                                "Quantity": adj.quantity,
+                                "Amount": float(difference_amount),
+                                "Supplier Pays Us": float(difference_amount) if exchange_direction == "receivable_from_supplier" else 0,
+                                "We Pay Supplier": float(difference_amount) if exchange_direction == "payable_to_supplier" else 0,
+                                "Date": adj.transaction_date.strftime('%Y-%m-%d %H:%M:%S'),
+                                "Notes": adj.notes or '',
+                                "Status": '',
+                            })
+                            continue
+                    except:
+                        pass
+                
+                # Regular adjustment
+                amount = Decimal(str(product.purchase_price)) * abs(adj.quantity) if product else Decimal('0')
+                data.append({
+                    "Type": "Adjustment",
+                    "ID": adj.id,
+                    "Reference Number": adj.reference_number,
+                    "Supplier ID": adj.supplier_id or '',
+                    "Supplier Name": supplier.name if supplier else '',
+                    "Product ID": adj.product_id,
+                    "Product Name": product.product_name if product else '',
+                    "Quantity": adj.quantity,
+                    "Amount": float(amount),
+                    "Supplier Pays Us": float(amount) if adj.quantity > 0 else 0,
+                    "We Pay Supplier": float(amount) if adj.quantity < 0 else 0,
+                    "Date": adj.transaction_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    "Notes": adj.notes or '',
+                    "Status": ''
+                })
+        
+        if export_type in ['all', 'returns']:
+            # Get returns
+            returns = StockTransaction.query.filter_by(transaction_type='Return').all()
+            for ret in returns:
+                supplier = Supplier.query.get(ret.supplier_id) if ret.supplier_id else None
+                product = Product.query.get(ret.product_id) if ret.product_id else None
+                
+                data.append({
+                    "Type": "Return",
+                    "ID": ret.id,
+                    "Reference Number": ret.reference_number,
+                    "Supplier ID": ret.supplier_id or '',
+                    "Supplier Name": supplier.name if supplier else '',
+                    "Product ID": ret.product_id,
+                    "Product Name": product.product_name if product else '',
+                    "Quantity": ret.quantity,
+                    "Amount": float(product.purchase_price * ret.quantity) if product else 0,
+                    "Supplier Pays Us": float(product.purchase_price * ret.quantity) if product else 0,
+                    "We Pay Supplier": 0,
+                    "Date": ret.transaction_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    "Notes": ret.notes or '',
+                    "Status": '',
+                    "Action Taken": '',
+                    "Damage Reason": '',
+                    "Repair Cost": ''
+                })
+        
+        if export_type in ['all', 'damage']:
+            # Get damage records
+            damages = DamagedProduct.query.all()
+            for damage in damages:
+                product = Product.query.get(damage.product_id) if damage.product_id else None
+                
+                data.append({
+                    "Type": "Damage",
+                    "ID": damage.id,
+                    "Reference Number": '',
+                    "Supplier ID": '',
+                    "Supplier Name": '',
+                    "Product ID": damage.product_id,
+                    "Product Name": product.product_name if product else '',
+                    "Quantity": damage.quantity,
+                    "Amount": float(damage.repair_cost or 0),
+                    "Supplier Pays Us": 0,
+                    "We Pay Supplier": float(damage.repair_cost or 0),
+                    "Date": damage.damage_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    "Notes": '',
+                    "Status": damage.status,
+                    "Action Taken": damage.action_taken or '',
+                    "Damage Reason": damage.damage_reason or '',
+                    "Repair Cost": float(damage.repair_cost or 0)
+                })
+        
+        df = pd.DataFrame(data)
+        
+        if format_type == 'excel':
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Purchase Billing', index=False)
+            output.seek(0)
+            
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=f'purchase_billing_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            )
+        else:
+            output = io.StringIO()
+            df.to_csv(output, index=False)
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            response.headers['Content-Disposition'] = f'attachment; filename=purchase_billing_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            return response
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

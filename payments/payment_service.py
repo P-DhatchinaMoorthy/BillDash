@@ -1,5 +1,5 @@
 from decimal import Decimal
-from extensions import db
+from src.extensions import db
 from payments.payment import Payment
 from invoices.invoice import Invoice
 from customers.customer import Customer
@@ -222,7 +222,7 @@ class PaymentService:
         
         # Calculate totals
         total_paid = sum([Decimal(p.amount_paid) for p in payments])
-        total_discount = sum([Decimal(p.discount_amount) for p in payments])
+        total_discount = sum([Decimal(getattr(p, 'discount_amount', 0)) for p in payments])
         total_excess = sum([Decimal(p.excess_amount) for p in payments])
         balance_due = Decimal(invoice.grand_total) - total_paid
         
@@ -292,8 +292,8 @@ class PaymentService:
                 "payment_date": p.payment_date.isoformat(),
                 "payment_method": p.payment_method,
                 "amount_before_discount": f"{p.amount_before_discount:.2f}",
-                "discount_percentage": f"{p.discount_percentage:.2f}",
-                "discount_amount": f"{p.discount_amount:.2f}",
+                "discount_percentage": f"{getattr(p, 'discount_percentage', 0):.2f}",
+                "discount_amount": f"{getattr(p, 'discount_amount', 0):.2f}",
                 "amount_paid": f"{p.amount_paid:.2f}",
                 "balance_amount": f"{max(Decimal('0'), p.balance_amount):.2f}",
                 "excess_amount": f"{p.excess_amount:.2f}",
@@ -337,7 +337,11 @@ class PaymentService:
                 "gst_number": company_settings.gst_number if company_settings else "GSTIN-XXXXXXXXX",
                 "registered_address": company_settings.registered_address if company_settings else "Address not available",
                 "state": company_settings.state if company_settings else "State",
-                "postal_code": company_settings.postal_code if company_settings else "000000"
+                "postal_code": company_settings.postal_code if company_settings else "000000",
+                "bank_name": company_settings.bank_name if company_settings else "Bank Name Not Set",
+                "account_number": company_settings.account_number if company_settings else "Account Number Not Set",
+                "ifsc_code": company_settings.ifsc_code if company_settings else "IFSC Code Not Set",
+                "branch": company_settings.branch if company_settings else "Branch Not Set"
             },
             "logo_base64": logo_base64
         }

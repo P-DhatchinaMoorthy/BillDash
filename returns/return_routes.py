@@ -1,15 +1,20 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file, make_response
 from returns.return_service import ReturnService
 from returns.product_return import ProductReturn, DamagedProduct
 from products.product import Product
 from customers.customer import Customer
 from src.extensions import db
-from user.auth_bypass import require_permission
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
+import pandas as pd
+import io
+from datetime import datetime
 
 return_bp = Blueprint('returns', __name__)
 
 @return_bp.route('/returns/', methods=['POST'])
-@require_permission('returns', 'write')
+@require_permission_jwt('returns', 'write')
+@audit_decorator('returns', 'CREATE')
 def create_return():
     """Create a new product return"""
     try:
@@ -44,6 +49,14 @@ def create_return():
         final_unit_price = price_after_discount * (1 + tax_rate / 100)
         
         quantity = data.get('quantity_returned', 1)
+        
+        # Validate return quantity
+        is_valid, error_msg = ReturnService.validate_return_quantity(
+            data['invoice_id'], data['product_id'], quantity
+        )
+        if not is_valid:
+            return jsonify({"error": error_msg}), 400
+        
         refund_amount = round(final_unit_price * quantity, 2)
         
         # Create return data
@@ -81,7 +94,7 @@ def create_return():
         return jsonify({"error": str(e)}), 500
 
 @return_bp.route('/returns/', methods=['GET'])
-@require_permission('returns', 'read')
+@require_permission_jwt('returns', 'read')
 def get_all_returns():
     """Get all product returns with summary"""
     try:
@@ -128,7 +141,7 @@ def get_all_returns():
         return jsonify({"error": str(e)}), 500
 
 @return_bp.route('/returns/<int:return_id>', methods=['GET'])
-@require_permission('returns', 'read')
+@require_permission_jwt('returns', 'read')
 def get_return_details(return_id):
     """Get details of a specific return"""
     try:
@@ -180,7 +193,7 @@ def get_return_details(return_id):
 
 
 @return_bp.route('/damaged-products/', methods=['GET'])
-@require_permission('returns', 'read')
+@require_permission_jwt('returns', 'read')
 def get_damaged_products():
     """Get inventory of damaged products"""
     try:
@@ -189,8 +202,103 @@ def get_damaged_products():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@return_bp.route('/damaged-products/<int:id>', methods=['GET'])
+@require_permission_jwt('returns', 'read')
+def get_damaged_product_by_id(id):
+    """Get specific damaged product by ID with all details"""
+    try:
+        damaged_product = DamagedProduct.query.get_or_404(id)
+        
+        # Get return details
+        return_record = damaged_product.return_record if damaged_product.return_record else None
+        
+        # Get customer details
+        customer = None
+        if return_record and return_record.customer:
+            customer = return_record.customer
+        
+        # Get invoice details
+        invoice = None
+        if return_record and return_record.original_invoice:
+            invoice = return_record.original_invoice
+        
+        # Get product details with category
+        product = damaged_product.product
+        category = None
+        if product and product.category_id:
+            from category.category import Category
+            category = Category.query.get(product.category_id)
+        
+        # Get payment details if invoice exists
+        payment_details = None
+        if invoice:
+            from payments.payment import Payment
+            payments = Payment.query.filter_by(invoice_id=invoice.id).all()
+            total_paid = sum([float(p.amount_paid) for p in payments])
+            payment_details = {
+                "total_invoice_amount": float(invoice.grand_total),
+                "total_paid": total_paid,
+                "pending_amount": float(invoice.grand_total) - total_paid,
+                "payment_status": "Paid" if total_paid >= float(invoice.grand_total) else "Pending"
+            }
+        
+        # Calculate damage value
+        damage_value = float(return_record.original_price) * damaged_product.quantity if return_record else 0
+        
+        return jsonify({
+            "damaged_product_id": damaged_product.id,
+            "return_id": damaged_product.return_id,
+            "return_number": return_record.return_number if return_record else None,
+            "quantity_damaged": damaged_product.quantity,
+            "damage_level": damaged_product.damage_level,
+            "damage_reason": damaged_product.damage_reason,
+            "damage_date": damaged_product.damage_date.strftime("%Y-%m-%d %H:%M:%S"),
+            "storage_location": damaged_product.storage_location,
+            "status": damaged_product.status,
+            "action_taken": damaged_product.action_taken,
+            "action_date": damaged_product.action_date.strftime("%Y-%m-%d %H:%M:%S") if damaged_product.action_date else None,
+            "repair_cost": float(damaged_product.repair_cost) if damaged_product.repair_cost else 0,
+            "damage_value": damage_value,
+            "customer_details": {
+                "customer_id": customer.id if customer else None,
+                "customer_name": customer.contact_person if customer else None,
+                "business_name": customer.business_name if customer else None,
+                "phone": customer.phone if customer else None,
+                "email": customer.email if customer else None,
+                "address": customer.billing_address if customer else None
+            } if customer else None,
+            "product_details": {
+                "product_id": product.id if product else None,
+                "product_name": product.product_name if product else None,
+                "sku": product.sku if product else None,
+                "original_price": float(return_record.original_price) if return_record else 0,
+                "current_stock": product.quantity_in_stock if product else 0,
+                "category_name": category.name if category else None
+            } if product else None,
+            "invoice_details": {
+                "invoice_id": invoice.id if invoice else None,
+                "invoice_number": invoice.invoice_number if invoice else None,
+                "invoice_date": invoice.invoice_date.strftime("%Y-%m-%d") if invoice else None,
+                "grand_total": float(invoice.grand_total) if invoice else 0,
+                "payment_terms": invoice.payment_terms if invoice else None
+            } if invoice else None,
+            "payment_details": payment_details,
+            "refund_details": {
+                "refund_amount": float(return_record.refund_amount) if return_record and return_record.refund_amount else 0,
+                "refund_status": return_record.status if return_record else None,
+                "return_date": return_record.return_date.strftime("%Y-%m-%d %H:%M:%S") if return_record else None,
+                "return_type": return_record.return_type if return_record else None,
+                "product_type": return_record.product_type if return_record else None
+            } if return_record else None,
+            "created_at": damaged_product.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "updated_at": damaged_product.updated_at.strftime("%Y-%m-%d %H:%M:%S") if damaged_product.updated_at else None
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @return_bp.route('/damaged-products/', methods=['POST'])
-@require_permission('returns', 'write')
+@require_permission_jwt('returns', 'write')
+@audit_decorator('returns', 'DAMAGE')
 def create_damaged_product_return():
     """Create a damaged product return"""
     try:
@@ -232,6 +340,14 @@ def create_damaged_product_return():
         price_after_discount = unit_price - discount_per_item
         final_unit_price = price_after_discount * (1 + tax_rate / 100)
         quantity = data.get('quantity_returned', 1)
+        
+        # Validate return quantity
+        is_valid, error_msg = ReturnService.validate_return_quantity(
+            data['invoice_id'], data['product_id'], quantity
+        )
+        if not is_valid:
+            return jsonify({"error": error_msg}), 400
+        
         refund_amount = round(final_unit_price * quantity, 2)
         
         # Create return data
@@ -272,7 +388,7 @@ def create_damaged_product_return():
         return jsonify({"error": str(e)}), 500
 
 @return_bp.route('/adjustments/', methods=['GET'])
-@require_permission('returns', 'read')
+@require_permission_jwt('returns', 'read')
 def get_adjustments():
     """Get all product adjustments"""
     try:
@@ -342,7 +458,8 @@ def get_adjustments():
         return jsonify({"error": str(e)}), 500
 
 @return_bp.route('/adjustments/', methods=['POST'])
-@require_permission('returns', 'write')
+@require_permission_jwt('returns', 'write')
+@audit_decorator('returns', 'ADJUSTMENT')
 def create_adjustment():
     """Create a product adjustment/exchange"""
     try:
@@ -388,6 +505,13 @@ def create_adjustment():
         quantity = data.get('quantity_returned', 1)
         exchange_quantity = data.get('exchange_quantity', quantity)
         
+        # Validate return quantity
+        is_valid, error_msg = ReturnService.validate_return_quantity(
+            data['invoice_id'], data['product_id'], quantity
+        )
+        if not is_valid:
+            return jsonify({"error": error_msg}), 400
+        
         price_difference = round((new_unit_price * exchange_quantity) - (old_final_price * quantity), 2)
         
         # Create return data for exchange
@@ -431,7 +555,178 @@ def create_adjustment():
             return jsonify({"error": result['error']}), 400
             
     except Exception as e:
-        return jsonify({"error": str(e)}),
+        return jsonify({"error": str(e)}), 500
+
+
+@return_bp.route('/returns/export', methods=['GET'])
+@require_permission_jwt('returns', 'read')
+def export_returns_data():
+    try:
+        format_type = request.args.get('format', 'csv').lower()
+        export_type = request.args.get('type', 'all')  # all, returns, adjustments, damage
         
+        data = []
+        
+        if export_type in ['all', 'returns']:
+            # Get regular returns
+            returns = ProductReturn.query.filter_by(return_type='return').all()
+            for r in returns:
+                data.append({
+                    "Type": "Return",
+                    "ID": r.id,
+                    "Return Number": r.return_number,
+                    "Customer ID": r.customer_id,
+                    "Customer Name": r.customer.contact_person if r.customer else '',
+                    "Product ID": r.product_id,
+                    "Product Name": r.product.product_name if r.product else '',
+                    "Quantity": r.quantity_returned,
+                    "Original Price": float(r.original_price or 0),
+                    "Refund Amount": float(r.refund_amount or 0),
+                    "Status": r.status,
+                    "Date": r.return_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    "Reason": r.reason or '',
+                    "Notes": r.notes or '',
+                    "Exchange Product ID": '',
+                    "Exchange Product Name": '',
+                    "Exchange Quantity": '',
+                    "Price Difference": '',
+                    "Damage Level": '',
+                    "Is Resaleable": ''
+                })
+        
+        if export_type in ['all', 'adjustments']:
+            # Get adjustments (exchanges)
+            adjustments = ProductReturn.query.filter_by(return_type='exchange').all()
+            for adj in adjustments:
+                data.append({
+                    "Type": "Adjustment/Exchange",
+                    "ID": adj.id,
+                    "Return Number": adj.return_number,
+                    "Customer ID": adj.customer_id,
+                    "Customer Name": adj.customer.contact_person if adj.customer else '',
+                    "Product ID": adj.product_id,
+                    "Product Name": adj.product.product_name if adj.product else '',
+                    "Quantity": adj.quantity_returned,
+                    "Original Price": float(adj.original_price or 0),
+                    "Refund Amount": float(adj.refund_amount or 0),
+                    "Status": adj.status,
+                    "Date": adj.return_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    "Reason": adj.reason or '',
+                    "Notes": adj.notes or '',
+                    "Exchange Product ID": adj.exchange_product_id or '',
+                    "Exchange Product Name": adj.exchange_product.product_name if adj.exchange_product else '',
+                    "Exchange Quantity": adj.exchange_quantity or '',
+                    "Price Difference": float(adj.exchange_price_difference or 0),
+                    "Damage Level": '',
+                    "Is Resaleable": ''
+                })
+        
+        if export_type in ['all', 'damage']:
+            # Get damage returns
+            damage_returns = ProductReturn.query.filter_by(return_type='damage').all()
+            for dmg in damage_returns:
+                data.append({
+                    "Type": "Damage",
+                    "ID": dmg.id,
+                    "Return Number": dmg.return_number,
+                    "Customer ID": dmg.customer_id,
+                    "Customer Name": dmg.customer.contact_person if dmg.customer else '',
+                    "Product ID": dmg.product_id,
+                    "Product Name": dmg.product.product_name if dmg.product else '',
+                    "Quantity": dmg.quantity_returned,
+                    "Original Price": float(dmg.original_price or 0),
+                    "Refund Amount": float(dmg.refund_amount or 0),
+                    "Status": dmg.status,
+                    "Date": dmg.return_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    "Reason": dmg.reason or '',
+                    "Notes": dmg.notes or '',
+                    "Exchange Product ID": '',
+                    "Exchange Product Name": '',
+                    "Exchange Quantity": '',
+                    "Price Difference": '',
+                    "Damage Level": dmg.damage_level or '',
+                    "Is Resaleable": str(dmg.is_resaleable) if dmg.is_resaleable is not None else ''
+                })
+            
+            # Get damaged products inventory
+            damaged_products = DamagedProduct.query.all()
+            for dp in damaged_products:
+                product = Product.query.get(dp.product_id) if dp.product_id else None
+                data.append({
+                    "Type": "Damaged Stock",
+                    "ID": dp.id,
+                    "Return Number": '',
+                    "Customer ID": '',
+                    "Customer Name": '',
+                    "Product ID": dp.product_id,
+                    "Product Name": product.product_name if product else '',
+                    "Quantity": dp.quantity,
+                    "Original Price": '',
+                    "Refund Amount": '',
+                    "Status": dp.status,
+                    "Date": dp.damage_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    "Reason": dp.damage_reason or '',
+                    "Notes": '',
+                    "Exchange Product ID": '',
+                    "Exchange Product Name": '',
+                    "Exchange Quantity": '',
+                    "Price Difference": '',
+                    "Damage Level": dp.damage_level or '',
+                    "Is Resaleable": ''
+                })
+        
+        df = pd.DataFrame(data)
+        
+        if format_type == 'excel':
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Returns & Adjustments', index=False)
+            output.seek(0)
+            
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=f'returns_adjustments_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            )
+        else:
+            output = io.StringIO()
+            df.to_csv(output, index=False)
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+            response.headers['Content-Disposition'] = f'attachment; filename=returns_adjustments_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            return response
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+@return_bp.route('/returns/<int:return_id>', methods=['DELETE'])
+@require_permission_jwt('returns', 'write')
+@audit_decorator('returns', 'DELETE')
+def delete_return(return_id):
+    return_item = ProductReturn.query.get(return_id)
+    if not return_item:
+        return jsonify({"error": "Return not found"}), 404
+    
+    try:
+        db.session.delete(return_item)
+        db.session.commit()
+        return jsonify({"message": "Return deleted successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+@return_bp.route('/damaged-products/<int:damaged_id>', methods=['DELETE'])
+@require_permission_jwt('returns', 'write')
+@audit_decorator('returns', 'DELETE_DAMAGED')
+def delete_damaged_product(damaged_id):
+    damaged_product = DamagedProduct.query.get(damaged_id)
+    if not damaged_product:
+        return jsonify({"error": "Damaged product not found"}), 404
+    
+    try:
+        db.session.delete(damaged_product)
+        db.session.commit()
+        return jsonify({"message": "Damaged product deleted successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400

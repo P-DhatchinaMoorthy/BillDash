@@ -54,34 +54,9 @@ class Product(db.Model):
     
     # Barcode / QR Code
     barcode = db.Column(db.String(200), nullable=True)
-    
 
-    
     # Date Added (automate)
     date_added = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Last Updated Date (automate only when updated)
     last_updated = db.Column(db.DateTime, onupdate=datetime.utcnow)
-
-    # Relationships - using back_populates to avoid circular imports
-    # invoice_items = db.relationship("InvoiceItem", backref="product_ref", lazy=True)
-    # sales_no_invoice = db.relationship("SaleNoInvoice", backref="product_ref", lazy=True)
-    # stock_transactions = db.relationship("StockTransaction", backref="product_ref", lazy=True)
-
-    # auto-calc selling price: purchase_price * 1.10
-    def compute_selling_price(self):
-        # using Decimal for precise monetary calculation
-        pp = Decimal(self.purchase_price or 0)
-        sp = (pp * Decimal("1.10")).quantize(Decimal("0.01"))
-        return sp
-
-# event listeners to auto-set selling_price when insert or update
-@event.listens_for(Product, "before_insert")
-def set_selling_price_before_insert(mapper, connection, target):
-    if target.purchase_price is not None:
-        target.selling_price = target.compute_selling_price()
-
-@event.listens_for(Product, "before_update")
-def set_selling_price_before_update(mapper, connection, target):
-    # Recompute selling price if purchase_price changed
-    target.selling_price = target.compute_selling_price()

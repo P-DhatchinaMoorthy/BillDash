@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, make_response, send_file
 from payments.payment_service import PaymentService
 from templates.pdf_service import PDFService
 from settings.company_settings import Settings
+from user.enhanced_auth_middleware import require_permission_jwt
 import os
 import io
 from jinja2 import Environment, FileSystemLoader
@@ -13,6 +14,7 @@ TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 bp = Blueprint("invoice_web", __name__)
 
 @bp.route("/invoices/index.html", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def invoice_index():
     """
     Serve the main invoice display page from templates
@@ -22,6 +24,7 @@ def invoice_index():
     return template.render()
 
 @bp.route("/invoice/<int:invoice_id>/details/index.html", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def invoice_html_view(invoice_id):
     """
     Display invoice as HTML with download button
@@ -49,33 +52,53 @@ def invoice_html_view(invoice_id):
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/invoice/<int:invoice_id>/download", methods=["POST"])
+@require_permission_jwt('invoices', 'read')
 def download_invoice_pdf(invoice_id):
     """
-    Generate and download PDF directly from invoice data
+    Generate and download PDF using weasyprint
     """
     try:
-        # Generate PDF using PDF service
-        result = PDFService.generate_pdf_from_invoice(invoice_id)
+        # Get invoice data
+        invoice_data = PaymentService.get_detailed_invoice(invoice_id)
+        if not invoice_data:
+            return jsonify({"error": "Invoice not found"}), 404
         
-        if not result['success']:
-            return jsonify({"error": result['error']}), 500
+        # Get company settings
+        company_settings = Settings.query.first()
         
-        # Create file-like object from PDF content
-        pdf_buffer = io.BytesIO(result['pdf_content'])
-        pdf_buffer.seek(0)
+        # Render HTML template
+        env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+        template = env.get_template('invoice_template.html')
+        invoice_data['generated_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        invoice_data['base_url'] = request.host_url.rstrip('/')
+        invoice_data['company_settings'] = company_settings
+        html_content = template.render(**invoice_data, download_mode=True)
         
-        # Return PDF as downloadable file
-        return send_file(
-            pdf_buffer,
-            as_attachment=True,
-            download_name=result['filename'],
-            mimetype='application/pdf'
-        )
+        # Generate PDF using weasyprint
+        try:
+            from weasyprint import HTML, CSS
+            pdf_buffer = io.BytesIO()
+            HTML(string=html_content).write_pdf(pdf_buffer)
+            pdf_buffer.seek(0)
+            
+            return send_file(
+                pdf_buffer,
+                as_attachment=True,
+                download_name=f'invoice_{invoice_id}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf',
+                mimetype='application/pdf'
+            )
+        except ImportError:
+            # Fallback to HTML download if weasyprint not available
+            response = make_response(html_content)
+            response.headers['Content-Type'] = 'text/html'
+            response.headers['Content-Disposition'] = f'attachment; filename=invoice_{invoice_id}.html'
+            return response
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/invoice/<int:invoice_id>/received/index.html", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def invoice_received_html_view(invoice_id):
     """
     Display received payment confirmation as HTML for fully paid invoices
@@ -107,6 +130,7 @@ def invoice_received_html_view(invoice_id):
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/invoice/<int:invoice_id>/download/html", methods=["POST"])
+@require_permission_jwt('invoices', 'read')
 def download_invoice_html(invoice_id):
     """
     Fallback: Download clean HTML if PDF generation fails
@@ -138,6 +162,7 @@ def download_invoice_html(invoice_id):
         return jsonify({"error": str(e)}), 500
 
 @bp.route("/invoice/<int:invoice_id>/received/download", methods=["POST"])
+@require_permission_jwt('invoices', 'read')
 def download_received_invoice_html(invoice_id):
     """
     Download received payment confirmation as HTML

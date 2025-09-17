@@ -1,5 +1,5 @@
 from datetime import datetime
-from extensions import db
+from src.extensions import db
 from sqlalchemy.orm import relationship
 
 class SupplierDamage(db.Model):

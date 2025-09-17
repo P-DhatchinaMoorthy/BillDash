@@ -7,7 +7,9 @@ Supplier Module API Links
 ├── Purchase History: http://localhost:5000/suppliers/{id}/purchase-history
 ├── Payment History: http://localhost:5000/suppliers/{id}/payment-history
 ├── All Purchase History: http://localhost:5000/suppliers/purchase-history
-└── All Payment History: http://localhost:5000/suppliers/payment-history
+├── All Payment History: http://localhost:5000/suppliers/payment-history
+├── Export CSV: http://localhost:5000/suppliers/export/csv
+└── Export Excel: http://localhost:5000/suppliers/export/excel
 
 GET Requests:
 - List all suppliers: http://localhost:5000/suppliers/
@@ -28,6 +30,8 @@ GET Requests:
 - Get all payment history: http://localhost:5000/suppliers/payment-history
 - Filter all payments by date: http://localhost:5000/suppliers/payment-history?date_from=2025-01-01&date_to=2025-01-31
 - Filter all payments by status: http://localhost:5000/suppliers/payment-history?payment_status=pending
+- Export suppliers to CSV: http://localhost:5000/suppliers/export/csv
+- Export suppliers to Excel: http://localhost:5000/suppliers/export/excel
 
 POST Requests:
 - Create Supplier: http://localhost:5000/suppliers/

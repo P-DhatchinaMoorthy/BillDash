@@ -1,0 +1,64 @@
+DAMAGE MODULE - RETURN TO SUPPLIER API
+=====================================
+
+BASE URL: http://localhost:5000/damage
+
+ENDPOINTS:
+==========
+
+1. POST /return-to-supplier/
+   - Return customer-damaged product to supplier
+   - Request refund or replacement from supplier
+
+2. GET /supplier-returns/
+   - View all products returned to suppliers
+
+SAMPLE REQUESTS:
+================
+
+1. RETURN FOR REFUND:
+POST http://localhost:5000/damage/return-to-supplier/
+{
+  "damaged_product_id": 6006,
+  "return_type": "refund",
+  "notes": "Customer returned damaged Chain sprocket, requesting refund from supplier"
+}
+
+2. RETURN FOR REPLACEMENT:
+POST http://localhost:5000/damage/return-to-supplier/
+{
+  "damaged_product_id": 6006,
+  "return_type": "replacement", 
+  "notes": "Customer returned damaged Chain sprocket, requesting replacement from supplier"
+}
+
+SAMPLE RESPONSE:
+================
+{
+  "message": "Damaged product returned to supplier for refund",
+  "supplier_return_id": 1,
+  "return_number": "SR-20241201-0001",
+  "refund_amount": "3540.00"
+}
+
+WHAT HAPPENS:
+=============
+- Creates record in supplier_returns table
+- Updates damaged_products status: "Stored" → "Returned to Supplier"
+- Sets action_taken = "Return_to_Supplier"
+- Prevents duplicate returns (once returned, cannot return again)
+
+ERROR CASES:
+============
+- Invalid damaged_product_id: "Damaged product not found"
+- Already returned: "This damaged product has already been returned to supplier"
+- Invalid return_type: "return_type must be 'refund' or 'replacement'"
+
+REQUIRED FIELDS:
+================
+- damaged_product_id (integer)
+- return_type ("refund" or "replacement")
+
+OPTIONAL FIELDS:
+================
+- notes (string)

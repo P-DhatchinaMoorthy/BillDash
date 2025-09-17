@@ -1,15 +1,20 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file, make_response
 from invoices.invoice_service import InvoiceService
 from invoices.invoice import Invoice
 from src.extensions import db
 from sqlalchemy import or_
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
 import pandas as pd
 import io
+from datetime import datetime
 
 bp = Blueprint("invoices", __name__)
 
 
 @bp.route("/", methods=["POST"])
+@require_permission_jwt('invoices', 'write')
+@audit_decorator('invoices', 'CREATE')
 def create_invoice():
     payload = request.get_json() or {}
     customer_id = payload.get("customer_id")
@@ -85,6 +90,7 @@ def create_invoice():
 
 
 @bp.route("/", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def list_invoices():
     try:
         query = Invoice.query
@@ -187,6 +193,7 @@ def list_invoices():
 
 
 @bp.route("/customer/<int:customer_id>", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def get_invoices_by_customer_id(customer_id):
     try:
         from customers.customer import Customer
@@ -204,8 +211,13 @@ def get_invoices_by_customer_id(customer_id):
         for invoice in invoices:
             payment = Payment.query.filter_by(invoice_id=invoice.id).first()
             payment_status = "pending"
-            if payment and payment.payment_status.lower() == "paid":
-                payment_status = "paid"
+            if payment:
+                if payment.payment_status.lower() == "successful":
+                    payment_status = "paid"
+                elif payment.payment_status.lower() == "partially paid":
+                    payment_status = "partially_paid"
+                else:
+                    payment_status = "pending"
 
             # Get invoice items with product details
             invoice_items = InvoiceItem.query.filter_by(invoice_id=invoice.id).all()
@@ -249,6 +261,7 @@ def get_invoices_by_customer_id(customer_id):
 
 
 @bp.route("customer/<int:customer_id>/", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def get_invoices_by_customer(customer_id):
     try:
         from customers.customer import Customer
@@ -280,8 +293,13 @@ def get_invoices_by_customer(customer_id):
         for invoice in invoices:
             payment = Payment.query.filter_by(invoice_id=invoice.id).first()
             payment_status = "pending"
-            if payment and payment.payment_status.lower() == "paid":
-                payment_status = "paid"
+            if payment:
+                if payment.payment_status.lower() == "successful":
+                    payment_status = "paid"
+                elif payment.payment_status.lower() == "partially paid":
+                    payment_status = "partially_paid"
+                else:
+                    payment_status = "pending"
 
             # Apply payment status filter
             if payment_status_filter and payment_status != payment_status_filter.lower():
@@ -329,6 +347,7 @@ def get_invoices_by_customer(customer_id):
 
 
 @bp.route("/<int:invoice_id>", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def get_invoice_by_id(invoice_id):
     try:
         invoice = Invoice.query.get(invoice_id)
@@ -395,6 +414,7 @@ def get_invoice_by_id(invoice_id):
 
 
 @bp.route("/search", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def search_invoices():
     try:
         search_term = request.args.get('q', '')
@@ -462,6 +482,7 @@ def search_invoices():
 
 
 @bp.route("/filter", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def filter_invoices():
     try:
         status = request.args.get('status', 'all').lower()
@@ -519,6 +540,7 @@ def filter_invoices():
 
 
 @bp.route("/<int:customer_id>", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def get_invoices_for_customer(customer_id):
     try:
         from customers.customer import Customer
@@ -536,8 +558,13 @@ def get_invoices_for_customer(customer_id):
         for invoice in invoices:
             payment = Payment.query.filter_by(invoice_id=invoice.id).first()
             payment_status = "pending"
-            if payment and payment.payment_status.lower() == "paid":
-                payment_status = "paid"
+            if payment:
+                if payment.payment_status.lower() == "successful":
+                    payment_status = "paid"
+                elif payment.payment_status.lower() == "partially paid":
+                    payment_status = "partially_paid"
+                else:
+                    payment_status = "pending"
 
             # Get invoice items with product details
             invoice_items = InvoiceItem.query.filter_by(invoice_id=invoice.id).all()
@@ -581,47 +608,198 @@ def get_invoices_for_customer(customer_id):
 
 
 @bp.route("/<int:invoice_id>", methods=["PUT"])
+@require_permission_jwt('invoices', 'write')
+@audit_decorator('invoices', 'UPDATE')
 def update_invoice(invoice_id):
     from datetime import datetime
-    inv = Invoice.query.get(invoice_id)
-    if not inv:
+    from decimal import Decimal
+    from invoices.invoice_item import InvoiceItem
+    from products.product import Product
+    from category.category import Category
+    from stock_transactions.stock_transaction import StockTransaction
+    from payments.payment import Payment
+    
+    invoice = Invoice.query.get(invoice_id)
+    if not invoice:
         return jsonify({"error": "Invoice not found"}), 404
 
     data = request.get_json() or {}
     try:
-        # Update editable fields (excluding customer_id and invoice_id)
-        inv.payment_terms = data.get("payment_terms", inv.payment_terms)
-        inv.currency = data.get("currency", inv.currency)
-        inv.status = data.get("status", inv.status)
-        inv.notes = data.get("notes", inv.notes)
-        inv.shipping_charges = data.get("shipping_charges", inv.shipping_charges)
-        inv.other_charges = data.get("other_charges", inv.other_charges)
-
-        # Update due_date if provided
+        # Get current invoice items for stock reversal
+        current_items = InvoiceItem.query.filter_by(invoice_id=invoice_id).all()
+        
+        # Reverse stock for current items
+        for item in current_items:
+            product = Product.query.get(item.product_id)
+            if product:
+                product.quantity_in_stock += item.quantity
+                # Create reverse stock transaction
+                stock_txn = StockTransaction(
+                    product_id=product.id,
+                    transaction_type="Return",
+                    sale_type="Invoice Update",
+                    quantity=item.quantity,
+                    invoice_id=invoice.id
+                )
+                db.session.add(stock_txn)
+        
+        # Delete current invoice items
+        InvoiceItem.query.filter_by(invoice_id=invoice_id).delete()
+        
+        # Process new items if provided
+        new_items = data.get("items", [])
+        if new_items:
+            total_before_tax = Decimal("0.00")
+            total_tax = Decimal("0.00")
+            total_cgst = Decimal("0.00")
+            total_sgst = Decimal("0.00")
+            total_igst = Decimal("0.00")
+            total_discount = Decimal("0.00")
+            
+            for item_data in new_items:
+                product = Product.query.get(item_data["product_id"])
+                if not product:
+                    raise ValueError(f"Product {item_data['product_id']} not found")
+                
+                qty = int(item_data.get("quantity", 1))
+                if product.quantity_in_stock < qty:
+                    raise ValueError(f"Insufficient stock for {product.product_name}")
+                
+                unit_price = Decimal(product.selling_price)
+                discount_per_item = Decimal(item_data.get("discount_per_item", 0))
+                discount_type = item_data.get("discount_type", "percentage")
+                
+                # Get tax rates
+                category = Category.query.get(product.category_id) if product.category_id else None
+                if category:
+                    cgst_rate = Decimal(category.cgst_rate)
+                    sgst_rate = Decimal(category.sgst_rate)
+                    igst_rate = Decimal(category.igst_rate)
+                else:
+                    cgst_rate = sgst_rate = igst_rate = Decimal("0")
+                
+                # Calculate amounts
+                line_subtotal = unit_price * qty
+                if discount_type == "percentage":
+                    discount_amount = (line_subtotal * discount_per_item / Decimal("100.00")).quantize(Decimal("0.01"))
+                else:
+                    discount_amount = Decimal(str(discount_per_item)).quantize(Decimal("0.01"))
+                
+                if discount_amount > line_subtotal:
+                    discount_amount = line_subtotal
+                
+                line_after_discount = (line_subtotal - discount_amount).quantize(Decimal("0.01"))
+                cgst_amount = (line_after_discount * cgst_rate / Decimal("100.00")).quantize(Decimal("0.01"))
+                sgst_amount = (line_after_discount * sgst_rate / Decimal("100.00")).quantize(Decimal("0.01"))
+                igst_amount = (line_after_discount * igst_rate / Decimal("100.00")).quantize(Decimal("0.01"))
+                tax_amount = igst_amount
+                line_total = (line_after_discount + tax_amount).quantize(Decimal("0.01"))
+                
+                # Create new invoice item
+                invoice_item = InvoiceItem(
+                    invoice_id=invoice.id,
+                    product_id=product.id,
+                    quantity=qty,
+                    unit_price=unit_price,
+                    discount_per_item=discount_per_item,
+                    discount_type=discount_type,
+                    tax_rate_per_item=igst_rate,
+                    cgst_rate=cgst_rate,
+                    sgst_rate=sgst_rate,
+                    igst_rate=igst_rate,
+                    cgst_amount=cgst_amount,
+                    sgst_amount=sgst_amount,
+                    igst_amount=igst_amount,
+                    total_price=line_total
+                )
+                db.session.add(invoice_item)
+                
+                # Update stock and create transaction
+                product.quantity_in_stock -= qty
+                stock_txn = StockTransaction(
+                    product_id=product.id,
+                    transaction_type="Sale",
+                    sale_type="With Bill",
+                    quantity=qty,
+                    invoice_id=invoice.id
+                )
+                db.session.add(stock_txn)
+                
+                # Update totals
+                total_before_tax += line_after_discount
+                total_tax += tax_amount
+                total_cgst += cgst_amount
+                total_sgst += sgst_amount
+                total_igst += igst_amount
+                total_discount += discount_amount
+            
+            # Update invoice totals
+            invoice.total_before_tax = total_before_tax.quantize(Decimal("0.00"))
+            invoice.tax_amount = total_tax.quantize(Decimal("0.00"))
+            invoice.cgst_amount = total_cgst.quantize(Decimal("0.00"))
+            invoice.sgst_amount = total_sgst.quantize(Decimal("0.00"))
+            invoice.igst_amount = total_igst.quantize(Decimal("0.00"))
+            invoice.discount_amount = total_discount.quantize(Decimal("0.00"))
+        
+        # Update other invoice fields
+        invoice.payment_terms = data.get("payment_terms", invoice.payment_terms)
+        invoice.notes = data.get("notes", invoice.notes)
+        invoice.shipping_charges = Decimal(str(data.get("shipping_charges", invoice.shipping_charges)))
+        invoice.other_charges = Decimal(str(data.get("other_charges", invoice.other_charges)))
+        
+        # Handle additional discount
+        additional_discount = Decimal(str(data.get("additional_discount", invoice.additional_discount or 0)))
+        additional_discount_type = data.get("additional_discount_type", "percentage")
+        
+        if additional_discount > 0:
+            subtotal_with_tax = invoice.total_before_tax + invoice.tax_amount
+            if additional_discount_type == "percentage":
+                additional_discount_amount = (subtotal_with_tax * additional_discount / Decimal("100.00")).quantize(Decimal("0.01"))
+            else:
+                additional_discount_amount = additional_discount.quantize(Decimal("0.01"))
+        else:
+            additional_discount_amount = Decimal("0.00")
+        
+        invoice.additional_discount = additional_discount_amount
+        
+        # Calculate final grand total
+        subtotal_with_tax = invoice.total_before_tax + invoice.tax_amount
+        invoice.grand_total = (subtotal_with_tax - additional_discount_amount + invoice.shipping_charges + invoice.other_charges).quantize(Decimal("0.00"))
+        
+        # Update due date
         if "due_date" in data and data["due_date"]:
-            inv.due_date = datetime.strptime(data["due_date"], "%Y-%m-%d")
-
-        # Set updated_at timestamp
-        inv.updated_at = datetime.utcnow()
-
+            invoice.due_date = datetime.strptime(data["due_date"], "%Y-%m-%d")
+        
+        # Update payment amount
+        payment = Payment.query.filter_by(invoice_id=invoice.id).first()
+        if payment:
+            payment.amount_before_discount = invoice.grand_total
+        
+        invoice.updated_at = datetime.utcnow()
         db.session.commit()
+        
         return jsonify({
-            "invoice_id": inv.id,
-            "invoice_number": inv.invoice_number,
-            "status": inv.status,
-            "payment_terms": inv.payment_terms,
-            "currency": inv.currency,
-            "due_date": inv.due_date.strftime("%Y-%m-%d") if inv.due_date else None,
-            "shipping_charges": str(inv.shipping_charges),
-            "other_charges": str(inv.other_charges),
-            "notes": inv.notes
+            "invoice_id": invoice.id,
+            "invoice_number": invoice.invoice_number,
+            "grand_total": str(invoice.grand_total),
+            "total_before_tax": str(invoice.total_before_tax),
+            "tax_amount": str(invoice.tax_amount),
+            "discount_amount": str(invoice.discount_amount),
+            "shipping_charges": str(invoice.shipping_charges),
+            "other_charges": str(invoice.other_charges),
+            "additional_discount": str(invoice.additional_discount),
+            "status": invoice.status,
+            "message": "Invoice updated successfully with stock adjustments"
         }), 200
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
 
 @bp.route("/bulk-import", methods=["POST"])
+@require_permission_jwt('invoices', 'write')
+@audit_decorator('invoices', 'BULK_IMPORT')
 def bulk_import_invoices():
     try:
         if 'file' not in request.files:
@@ -707,6 +885,7 @@ def bulk_import_invoices():
 
 
 @bp.route("/export", methods=["GET"])
+@require_permission_jwt('invoices', 'read')
 def export_invoices():
     try:
         from flask import send_file, make_response
@@ -799,3 +978,25 @@ def export_invoices():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@bp.route("/<int:invoice_id>", methods=["DELETE"])
+@require_permission_jwt('invoices', 'write')
+@audit_decorator('invoices', 'DELETE')
+def delete_invoice(invoice_id):
+    invoice = Invoice.query.get(invoice_id)
+    if not invoice:
+        return jsonify({"error": "Invoice not found"}), 404
+    
+    try:
+        # Delete related invoice items and payments first
+        from invoices.invoice_item import InvoiceItem
+        from payments.payment import Payment
+        
+        InvoiceItem.query.filter_by(invoice_id=invoice_id).delete()
+        Payment.query.filter_by(invoice_id=invoice_id).delete()
+        
+        db.session.delete(invoice)
+        db.session.commit()
+        return jsonify({"message": "Invoice deleted successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400

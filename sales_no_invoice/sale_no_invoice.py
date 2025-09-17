@@ -15,5 +15,6 @@ class SaleNoInvoice(db.Model):
     amount_after_discount = db.Column(db.Numeric(14,2), nullable=False)
     payment_method = db.Column(db.String(50), nullable=False)
     notes = db.Column(db.Text, nullable=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
 
     product = db.relationship("Product", overlaps="product_ref,sales_no_invoice")

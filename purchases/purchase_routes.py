@@ -1,10 +1,14 @@
 from flask import Blueprint, request, jsonify
 from purchases.purchase_service import PurchaseService
+from user.enhanced_auth_middleware import require_permission_jwt
+from user.audit_logger import audit_decorator
 
 bp = Blueprint("purchases", __name__)
 
 
 @bp.route("/add-stock", methods=["POST"])
+@require_permission_jwt('purchases', 'write')
+@audit_decorator('purchases', 'ADD_STOCK')
 def add_stock_from_supplier():
     payload = request.get_json() or {}
     products = payload.get("products")
@@ -39,6 +43,8 @@ def add_stock_from_supplier():
 
 
 @bp.route("/update-payment/<int:purchase_id>", methods=["PUT"])
+@require_permission_jwt('purchases', 'write')
+@audit_decorator('purchases', 'UPDATE_PAYMENT')
 def update_purchase_payment(purchase_id):
     payload = request.get_json() or {}
     payment_amount = payload.get("payment_amount")
@@ -55,4 +61,23 @@ def update_purchase_payment(purchase_id):
         )
         return jsonify(result), 200
     except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@bp.route("/<int:purchase_id>", methods=["DELETE"])
+@require_permission_jwt('purchases', 'write')
+@audit_decorator('purchases', 'DELETE')
+def delete_purchase(purchase_id):
+    from stock_transactions.stock_transaction import StockTransaction
+    p = StockTransaction.query.get(purchase_id)
+    if not p:
+        return jsonify({"error": "Purchase not found"}), 404
+    
+    try:
+        from src.extensions import db
+        db.session.delete(p)
+        db.session.commit()
+        return jsonify({"message": "Purchase deleted successfully"}), 200
+    except Exception as e:
+        from src.extensions import db
+        db.session.rollback()
         return jsonify({"error": str(e)}), 400

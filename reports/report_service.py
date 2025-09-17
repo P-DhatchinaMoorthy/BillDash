@@ -1,4 +1,3 @@
-# services/report_service.py
 from products.product import Product
 from sales_no_invoice.sale_no_invoice import SaleNoInvoice
 from purchases.purchase_bill import PurchaseBill

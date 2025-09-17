@@ -1,4 +1,3 @@
-# models/report.py
 from extensions import db
 from datetime import datetime
 from sqlalchemy import Numeric

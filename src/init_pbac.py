@@ -17,7 +17,7 @@ def init_permissions():
     """Create default permissions for all modules"""
     modules = [
         'customers', 'suppliers', 'products', 'categories', 
-        'invoices', 'payments', 'sales', 'purchases', 
+        'invoices', 'payments', 'purchases',
         'reports', 'returns', 'admin', 'settings'
     ]
     
@@ -81,7 +81,6 @@ def setup_default_permissions():
             'categories': {'read': True, 'write': True, 'delete': False},
             'invoices': {'read': True, 'write': True, 'delete': False},
             'payments': {'read': True, 'write': True, 'delete': False},
-            'sales': {'read': True, 'write': True, 'delete': False},
             'purchases': {'read': True, 'write': True, 'delete': False},
             'reports': {'read': True, 'write': False, 'delete': False},
             'returns': {'read': True, 'write': True, 'delete': False}
@@ -93,7 +92,6 @@ def setup_default_permissions():
             'categories': {'read': True, 'write': False, 'delete': False},
             'invoices': {'read': True, 'write': True, 'delete': False},
             'payments': {'read': True, 'write': True, 'delete': False},
-            'sales': {'read': True, 'write': False, 'delete': False},
             'purchases': {'read': True, 'write': False, 'delete': False},
             'reports': {'read': True, 'write': False, 'delete': False},
             'returns': {'read': True, 'write': False, 'delete': False}
@@ -105,7 +103,6 @@ def setup_default_permissions():
             'categories': {'read': True, 'write': False, 'delete': False},
             'invoices': {'read': False, 'write': False, 'delete': False},
             'payments': {'read': True, 'write': True, 'delete': False},
-            'sales': {'read': True, 'write': True, 'delete': False},
             'purchases': {'read': False, 'write': False, 'delete': False},
             'reports': {'read': True, 'write': False, 'delete': False},
             'returns': {'read': True, 'write': True, 'delete': False}
@@ -117,7 +114,6 @@ def setup_default_permissions():
             'categories': {'read': True, 'write': True, 'delete': False},
             'invoices': {'read': False, 'write': False, 'delete': False},
             'payments': {'read': False, 'write': False, 'delete': False},
-            'sales': {'read': False, 'write': False, 'delete': False},
             'purchases': {'read': True, 'write': True, 'delete': False},
             'reports': {'read': True, 'write': False, 'delete': False},
             'returns': {'read': True, 'write': True, 'delete': False}

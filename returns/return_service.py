@@ -17,6 +17,36 @@ class ReturnService:
         return True, None
     
     @staticmethod
+    def validate_return_quantity(invoice_id, product_id, quantity_to_return):
+        """Validate that customer can only return up to the quantity they purchased"""
+        from invoices.invoice_item import InvoiceItem
+        
+        # Get original purchase quantity
+        invoice_item = InvoiceItem.query.filter_by(
+            invoice_id=invoice_id, 
+            product_id=product_id
+        ).first()
+        
+        if not invoice_item:
+            return False, "Product not found in this invoice"
+        
+        purchased_quantity = invoice_item.quantity
+        
+        # Get total already returned quantity for this product from this invoice
+        existing_returns = ProductReturn.query.filter_by(
+            original_invoice_id=invoice_id,
+            product_id=product_id
+        ).all()
+        
+        total_returned = sum(r.quantity_returned for r in existing_returns)
+        remaining_quantity = purchased_quantity - total_returned
+        
+        if quantity_to_return > remaining_quantity:
+            return False, f"Cannot return {quantity_to_return} items. Only {remaining_quantity} items available for return (purchased: {purchased_quantity}, already returned: {total_returned})"
+        
+        return True, None
+    
+    @staticmethod
     def process_return(return_data):
         """Process a product return and update stock accordingly"""
         try:
