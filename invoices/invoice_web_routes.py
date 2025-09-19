@@ -23,13 +23,32 @@ def invoice_index():
     template = env.get_template('index.html')
     return template.render()
 
-@bp.route("/invoice/<int:invoice_id>/details/index.html", methods=["GET"])
+@bp.route("/invoice/<int:invoice_id>/details/<template_name>.html", methods=["GET"])
 @require_permission_jwt('invoices', 'read')
-def invoice_html_view(invoice_id):
+def invoice_template_view(invoice_id, template_name):
     """
-    Display invoice as HTML with download button
+    Display invoice using different templates
     """
     try:
+        # Available templates
+        available_templates = {
+            "index": "invoice_template.html",
+            "template1": "template1.html",
+            "template2": "template2.html",
+            "template3": "template3.html",
+            "template4": "template4.html",
+            "template5": "template5.html",
+            "template6": "template6.html",
+            "template7": "template7.html",
+            "template8": "template8.html",
+            "template9": "template9.html",
+            "template10": "template10.html",
+            "template11": "template11.html"
+        }
+        
+        if template_name not in available_templates:
+            return jsonify({"error": "Template not found"}), 404
+        
         # Get invoice data
         invoice_data = PaymentService.get_detailed_invoice(invoice_id)
         if not invoice_data:
@@ -40,7 +59,7 @@ def invoice_html_view(invoice_id):
         
         # Render HTML template from templates directory
         env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
-        template = env.get_template('invoice_template.html')
+        template = env.get_template(available_templates[template_name])
         invoice_data['generated_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # Add base URL for images
         invoice_data['base_url'] = request.host_url.rstrip('/')

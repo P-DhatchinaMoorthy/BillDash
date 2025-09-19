@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invoice {{ invoice_number }}</title>
+  <title>Invoice {{ invoice.invoice_number }}</title>
   <style>
     @page {
       size: A4;
@@ -18,8 +18,9 @@
       .page-footer { position: running(page-footer); }
     }
     * { box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 0; background: #f5f5f5; }
-    .invoice-box { width: 210mm; margin: 16px auto; padding: 20px; background: white; }
+    body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 0; background: #f8f2e6; }
+    .invoice-box { width: 210mm; margin: 20px auto; padding: 22px; background: white; box-shadow: 0 4px 24px #eae0b2; }
+    .accent-bar { background: linear-gradient(90deg,#ffd452 60%,#fec163 100%); height: 30px; border-radius: 8px 8px 0 0; margin-bottom: 4px; }
     .page-header { margin-bottom: 20px; }
     .page-footer { margin-top: 20px; }
     .main-content { min-height: 500px; }
@@ -28,39 +29,35 @@
     .left { text-align: left; }
     .bold { font-weight: bold; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    table, th, td { border: 1px solid #000; }
+    table, th, td { border: 1px solid #d1c27b; }
     th, td { padding: 5px; font-size: 12px; }
-    th { background-color: #f5f5f5; font-weight: bold; text-align: center; }
+    th { background: #fffbe7; font-weight: bold; text-align: center; }
     td { text-align: center; }
     .item-cell { text-align: left; }
-    .bank-terms-table td { text-align: left !important; }
     .calc-table .right-align { text-align: right !important; }
     .calc-table td { text-align: center; }
     .calc-table th { text-align: center; }
     .calc-table .center-align { text-align: center !important; }
     .no-border { border: none; }
     .header-table td { border: none; padding: 10px; }
-    .signature-box { height: 100px; border: 1px dashed #000; text-align: center; vertical-align: middle; margin-top: 20px; }
-    .amount-section { background-color: #f9f9f9; }
-    .total-row { background-color: #e9e9e9; font-weight: bold; }
-    small { font-size: 10px; color: #666; }
+    .signature-box { height: 40px; border: 1px dashed #c09b43; text-align: center; vertical-align: middle; margin-top: 12px; }
+    .amount-section { background: #fffbe7; }
+    .total-row { background: #ffe999; font-weight: bold; }
+    small { font-size: 10px; color: #b89f25; }
     .status-paid { color: green; font-weight: bold; }
     .status-partial { color: orange; font-weight: bold; }
     .status-pending { color: red; font-weight: bold; }
-    .brand-name { font-size: 18px; font-weight: bold; text-align: center; color: #2c3e50; letter-spacing: 1px; }
-    .brand-slogan { font-size: 11px; text-align: center; color: #7f8c8d; margin-top: 2px; }
+    .brand-name { font-size: 18px; font-weight: bold; text-align: center; color: #c59e1e; letter-spacing: 1px; }
+    .brand-slogan { font-size: 11px; text-align: center; color: #ece3c3; margin-top: 2px; }
     .header-box { display: flex; }
-    .company-section { width: 50%; padding: 15px; display: flex; align-items: flex-end; }
-    .logo-area { width: 120px; margin-right: 15px; }
+    .company-section { width: 58%; padding: 14px; display: flex; align-items: flex-end; }
+    .logo-area { width: 120px; margin-right: 18px; }
     .company-info { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
-    .invoice-section { width: 50%; border-left: 1px solid #000; display: flex; align-items: flex-end; justify-content: flex-end; }
+    .invoice-section { width: 42%; border-left: 1px solid #c5b16d; display: flex; align-items: flex-end; justify-content: flex-end; }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <div class="invoice-box">
-
   <!-- Download and Send Mail Buttons -->
   <div class="no-print" style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
     <button onclick="downloadPDF()" style="background-color: #2c3e50; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; margin-right: 10px;">
@@ -70,11 +67,11 @@
       📧 Send Mail
     </button>
   </div>
-
-  <!-- PAGE HEADER - Repeats on every page -->
+  <div class="accent-bar"></div>
+  <!-- PAGE HEADER -->
   <div class="page-header">
     <div class="header-box">
-      <div class="company-section" style="border: 1px solid #000; border-right: none">
+      <div class="company-section" style="border: 1px solid #c5b16d; border-right: none">
         <div class="logo-area">
           {% if logo_base64 %}
           <img src="data:image/jpeg;base64,{{ logo_base64 }}" alt="Company Logo" style="width:100px; height:80px; object-fit: contain;">
@@ -105,16 +102,15 @@
         </table>
       </div>
     </div>
-
-    <table style="width: 753px;">
+    <table style="width: 758px; margin-top:16px;">
       <tr>
-        <td class="item-cell" style="width: 327px">
+        <td class="item-cell" style="width: 328px">
           <b>{{ customer.id }}</b>, <b>{{ customer.contact_person }}</b><br>
           <b>Billing address:</b>{{ customer.billing_address or 'Address not provided' }}<br>
           <b>Ph: </b>{{ customer.phone }}
           {% if customer.email %}<br><b>Email: </b>{{ customer.email }}{% endif %}
         </td>
-        <td class="item-cell" style="width: 326px">
+        <td class="item-cell" style="width: 328px">
           <b>Shipping address:</b>
           {{ customer.shipping_address or customer.billing_address or 'Address not provided' }}<br>
           <b>Branch:</b> {{ customer.branch or 'Not specified' }}
@@ -122,10 +118,8 @@
       </tr>
     </table>
   </div>
-
-  <!-- MAIN CONTENT - Flows between pages -->
+  <!-- MAIN CONTENT -->
   <div class="main-content">
-
   <table>
     <tr>
       <th>S.No</th><th class="item-cell">Product Name</th><th>Tax</th><th>Qty</th><th>Rate/Item</th><th>Amount</th>
@@ -141,15 +135,11 @@
     </tr>
     {% endfor %}
   </table>
-
 <div style="width: 100%; display: flex;">
 <div class="amount-section" style="width: 70%">
   <p><b>Amount Chargeable (in words):</b><br> INR {{ amount_in_words or 'Amount in words not available' }}.</p>
   {% if payments %}
-  <!-- Payment Details + Status aligned side by side -->
   <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-
-    <!-- Left Side: Payment Details -->
     <div style="flex: 1;">
       <p class="bold">Payment Details:</p>
       {% for payment in payments %}
@@ -161,92 +151,68 @@
         {% endif %}
       </p>
       {% endfor %}
-
-      <!-- Summary -->
       <p class="bold">
         Total Paid: ₹{{ summary.total_amount_paid }} | Balance Due: ₹{{ summary.balance_due }}
       </p>
-
       {% if summary.total_excess_amount and summary.total_excess_amount != '0.00' %}
       <p class="bold" style="color: blue;">
         Excess Amount: ₹{{ summary.total_excess_amount }}
       </p>
       {% endif %}
     </div>
-
-    <!-- Right Side: Big Status -->
     <div style="display: flex; align-items: center; justify-content: center; min-width: 200px; margin-right: 45px; margin-bottom: 30px">
       <h2 style="font-size: 20px; font-weight: bold; margin: 0; color: black; text-align: right;">
         PAYMENT : <span class="{% if invoice.status == 'Paid' %}status-paid{% elif invoice.status == 'Pending' %}status-pending{% elif invoice.status == 'Cancelled' %}status-cancelled{% endif %}">{{ invoice.status|upper }}</span>
       </h2>
     </div>
   </div>
-
   {% else %}
-  <!-- If no payments exist -->
   <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
     <p class="bold">Payment Status: {{ summary.payment_status }} | Balance Due: ₹{{ summary.balance_due }}</p>
   </div>
   {% endif %}
 </div>
-
-    <table style="width: 30%; border: 1px solid #000; margin-left: auto;">
-    <!-- Subtotal Row -->
+    <table style="width: 30%; border: 1px solid #c5b16d; margin-left: auto;">
     <tr>
-      <td colspan="8" style="width: 126px" class="right bold">Taxable Amount</td>
+      <td colspan="8" style="width: 124px" class="right bold">Taxable Amount</td>
       <td class="bold" style="width: 86px">₹{{ "%.2f"|format(calculations.subtotal|float) }}</td>
     </tr>
-
-    <!-- CGST Row -->
     {% set total_tax = invoice.tax_amount|float %}
     {% if total_tax > 0 %}
     <tr>
       <td colspan="8" class="right">CGST 9.0%</td>
       <td class="right">₹{{ "%.2f"|format(total_tax / 2) }}</td>
     </tr>
-
-    <!-- SGST Row -->
     <tr>
       <td colspan="8" class="right">SGST 9.0%</td>
       <td class="right">₹{{ "%.2f"|format(total_tax / 2) }}</td>
     </tr>
     {% endif %}
-
-    <!-- Discount Row -->
     {% if invoice.discount_amount and invoice.discount_amount != '0.00' %}
     <tr>
       <td colspan="8" class="right">Discount</td>
       <td class="right">-₹{{ "%.2f"|format(invoice.discount_amount|float) }}</td>
     </tr>
     {% endif %}
-
-    <!-- Shipping Charges Row -->
     {% if invoice.shipping_charges and invoice.shipping_charges != '0.00' %}
     <tr>
       <td colspan="8" class="right">Shipping Charges</td>
       <td class="right">₹{{ "%.2f"|format(invoice.shipping_charges|float) }}</td>
     </tr>
     {% endif %}
-
-    <!-- Other Charges Row -->
     {% if invoice.other_charges and invoice.other_charges != '0.00' %}
     <tr>
       <td colspan="8" class="right">Other Charges</td>
       <td class="right">₹{{ "%.2f"|format(invoice.other_charges|float) }}</td>
     </tr>
     {% endif %}
-
-    <!-- Grand Total Row -->
     <tr class="total-row">
       <td colspan="8" class="bold right">Grand Total</td>
       <td class="bold">₹{{ calculations.grand_total }}</td>
     </tr>
   </table>
 </div>
-
-
 <div class="page-footer">
-
   <table class="item-cell" style="width:100%; border-collapse: collapse;">
   <tr>
     <td style="text-align: left; vertical-align: top; padding: 5px;">
@@ -271,13 +237,15 @@
     </td>
   </tr>
 </table>
-
-
   <p class="center">This is a digitally signed document.<br>
   Generated on: {{ generated_at or 'N/A' }}<br>
   <small>Invoice ID: {{ invoice_id }} | Currency: {{ currency or 'INR' }}
   {% if invoice.updated_at %} | Last Updated: {{ invoice.updated_at[:10] }}{% endif %}</small></p>
 </div>
+</div>
+</div>
+</body>
+</html>
 
 
   <script>
@@ -370,11 +338,6 @@
       }
     }
   </script>
-
-</div>
-</div>
-</body>
-</html>
 
 <script>
 function downloadPDF() {

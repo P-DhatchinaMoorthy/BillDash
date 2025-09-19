@@ -1,0 +1,27 @@
+PURCHASE BILLING ENDPOINTS
+
+# Damage Management
+POST http://localhost:5000/purchase-billing/damage/
+GET http://localhost:5000/purchase-billing/damage
+GET http://localhost:5000/purchase-billing/damage/
+GET http://localhost:5000/purchase-billing/damage/<int:damage_id>
+
+# Purchase Bills
+GET http://localhost:5000/purchase-billing/
+GET http://localhost:5000/purchase-billing/supplier/<int:supplier_id>
+GET http://localhost:5000/purchase-billing/<int:purchase_id>
+
+# Returns & Adjustments
+POST http://localhost:5000/purchase-billing/return
+GET http://localhost:5000/purchase-billing/adjustment/
+GET http://localhost:5000/purchase-billing/adjustment/list
+GET http://localhost:5000/purchase-billing/adjustment/<int:adjustment_id>
+POST http://localhost:5000/purchase-billing/adjustment
+
+# Invoice Generation
+GET http://localhost:5000/purchase-billing/<int:purchase_id>/purchase.html
+GET http://localhost:5000/purchase-billing/<int:purchase_id>/invoice
+
+# Export Functions
+GET http://localhost:5000/purchase-billing/export
+GET http://localhost:5000/purchase-billing/export-all

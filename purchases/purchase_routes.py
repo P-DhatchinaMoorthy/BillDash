@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from purchases.purchase_service import PurchaseService
 from user.enhanced_auth_middleware import require_permission_jwt
 from user.audit_logger import audit_decorator
+from src.extensions import db
 
 bp = Blueprint("purchases", __name__)
 
@@ -25,6 +26,12 @@ def add_stock_from_supplier():
 
     if not supplier_id:
         return jsonify({"error": "supplier_id required"}), 400
+
+    # Validate supplier exists
+    from suppliers.supplier import Supplier
+    supplier = Supplier.query.get(supplier_id)
+    if not supplier:
+        return jsonify({"error": f"Supplier with ID {supplier_id} not found"}), 400
 
     try:
         result = PurchaseService.add_multiple_stock_from_supplier(
@@ -73,11 +80,9 @@ def delete_purchase(purchase_id):
         return jsonify({"error": "Purchase not found"}), 404
     
     try:
-        from src.extensions import db
         db.session.delete(p)
         db.session.commit()
         return jsonify({"message": "Purchase deleted successfully"}), 200
     except Exception as e:
-        from src.extensions import db
         db.session.rollback()
         return jsonify({"error": str(e)}), 400

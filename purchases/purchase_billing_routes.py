@@ -13,6 +13,7 @@ from datetime import datetime
 
 bp = Blueprint("purchase_billing", __name__)
 
+@bp.route("/damage", methods=["POST"])
 @bp.route("/damage/", methods=["POST"])
 @require_permission_jwt('purchases', 'write')
 @audit_decorator('purchases', 'DAMAGE_RECORD')
@@ -21,7 +22,13 @@ def create_damage_record():
     from purchases.supplier_damage import SupplierDamage
     from products.product import Product
     
-    data = request.get_json() or {}
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        return jsonify({"error": f"Invalid JSON: {str(e)}"}), 400
+    
+    if not data:
+        data = {}
     required = ["purchase_id", "supplier_id", "product_id", "quantity_damaged", "damage_type"]
     if not all(field in data for field in required):
         return jsonify({"error": f"Required fields: {required}"}), 400
@@ -51,6 +58,8 @@ def create_damage_record():
         replacement_date = datetime.utcnow() if damage_type == "replacement" else None
         replacement_quantity = quantity_damaged if damage_type == "replacement" else 0
         
+        total_amount = product.purchase_price * quantity_damaged
+        
         damage = SupplierDamage(
             purchase_id=data["purchase_id"],
             supplier_id=data["supplier_id"],
@@ -59,13 +68,13 @@ def create_damage_record():
             damage_type=damage_type,
             damage_reason=data.get("damage_reason"),
             unit_price=product.purchase_price,
+            total_amount=total_amount,
             refund_amount=refund_amount,
             status="Paid" if damage_type == "refund" else "Replaced",
             supplier_response=supplier_response,
             replacement_quantity=replacement_quantity,
             replacement_date=replacement_date,
-            notes=data.get("notes"),
-            created_by=data.get("created_by")
+            notes=data.get("notes")
         )
         
         db.session.add(damage)
@@ -113,25 +122,26 @@ def create_damage_record():
 @bp.route("/damage/", methods=["GET"])
 @require_permission_jwt('purchases', 'read')
 def list_damage_records():
-    from returns.product_return import DamagedProduct
+    from purchases.supplier_damage import SupplierDamage
     from products.product import Product
     
-    damages = DamagedProduct.query.all()
+    damages = SupplierDamage.query.all()
     result = []
     
     for damage in damages:
         product = Product.query.get(damage.product_id) if damage.product_id else None
         result.append({
             "damage_id": damage.id,
+            "damage_number": damage.damage_number,
             "product_id": damage.product_id,
             "product_name": product.product_name if product else "Unknown",
-            "quantity": damage.quantity,
+            "quantity_damaged": damage.quantity_damaged,
             "damage_date": damage.damage_date.isoformat(),
             "damage_reason": damage.damage_reason,
-            "damage_level": damage.damage_level,
+            "damage_type": damage.damage_type,
             "status": damage.status,
-            "action_taken": damage.action_taken,
-            "repair_cost": str(damage.repair_cost) if damage.repair_cost else "0.00"
+            "refund_amount": str(damage.refund_amount) if damage.refund_amount else "0.00",
+            "total_amount": str(damage.total_amount)
         })
     
     return jsonify(result), 200
@@ -140,10 +150,10 @@ def list_damage_records():
 @bp.route("/damage/<int:damage_id>", methods=["GET"])
 @require_permission_jwt('purchases', 'read')
 def get_damage_details(damage_id):
-    from returns.product_return import DamagedProduct
+    from purchases.supplier_damage import SupplierDamage
     from products.product import Product
     
-    damage = DamagedProduct.query.get(damage_id)
+    damage = SupplierDamage.query.get(damage_id)
     if not damage:
         return jsonify({"error": "Damage record not found"}), 404
     
@@ -151,6 +161,7 @@ def get_damage_details(damage_id):
     
     return jsonify({
         "damage_id": damage.id,
+        "damage_number": damage.damage_number,
         "product": {
             "id": product.id,
             "name": product.product_name,
@@ -158,27 +169,128 @@ def get_damage_details(damage_id):
             "purchase_price": str(product.purchase_price) if product.purchase_price else "0.00"
         } if product else None,
         "damage_details": {
-            "quantity": damage.quantity,
+            "quantity_damaged": damage.quantity_damaged,
             "damage_reason": damage.damage_reason,
-            "damage_level": damage.damage_level,
+            "damage_type": damage.damage_type,
             "damage_date": damage.damage_date.isoformat()
         },
-        "storage_info": {
-            "storage_location": damage.storage_location,
-            "status": damage.status
+        "financial_details": {
+            "unit_price": str(damage.unit_price),
+            "total_amount": str(damage.total_amount),
+            "refund_amount": str(damage.refund_amount),
+            "replacement_quantity": damage.replacement_quantity
         },
-        "action_details": {
-            "action_taken": damage.action_taken,
-            "action_date": damage.action_date.isoformat() if damage.action_date else None,
-            "repair_cost": str(damage.repair_cost) if damage.repair_cost else "0.00",
-            "refund_amount": str(float(product.purchase_price or 0) * damage.quantity) if damage.action_taken == "Dispose" and product else "0.00",
-            "is_replacement": "Yes" if damage.action_taken == "Return_to_Supplier" else "No"
+        "status_info": {
+            "status": damage.status,
+            "supplier_response": damage.supplier_response,
+            "replacement_date": damage.replacement_date.isoformat() if damage.replacement_date else None
         },
         "timestamps": {
             "created_at": damage.created_at.isoformat(),
             "updated_at": damage.updated_at.isoformat() if damage.updated_at else None
-        }
+        },
+        "notes": damage.notes
     }), 200
+
+
+@bp.route("/return", methods=["POST"])
+@bp.route("/return/", methods=["POST"])
+@require_permission_jwt('purchases', 'write')
+@audit_decorator('purchases', 'RETURN_STOCK')
+def return_stock_to_supplier():
+    from src.extensions import db
+    from stock_transactions.stock_transaction import StockTransaction
+    from products.product import Product
+    
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        return jsonify({"error": f"Invalid JSON: {str(e)}"}), 400
+    
+    required = ["purchase_id", "supplier_id", "product_id", "quantity"]
+    if not all(field in data for field in required):
+        return jsonify({"error": f"Required fields: {required}"}), 400
+
+    try:
+        product = Product.query.get(data["product_id"])
+        if not product:
+            return jsonify({"error": "Product not found"}), 400
+        
+        quantity = int(data["quantity"])
+        if product.quantity_in_stock < quantity:
+            return jsonify({"error": f"Insufficient stock. Available: {product.quantity_in_stock}, Requested: {quantity}"}), 400
+        
+        product.quantity_in_stock -= quantity
+        return_amount = product.purchase_price * quantity
+        
+        return_transaction = StockTransaction(
+            product_id=data["product_id"],
+            transaction_type="Return",
+            quantity=-quantity,
+            supplier_id=data["supplier_id"],
+            reference_number=f"RET-{data['purchase_id']}-{quantity}",
+            notes=data.get("notes", "")
+        )
+        
+        db.session.add(return_transaction)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": "Stock returned to supplier successfully",
+            "return_details": {
+                "return_id": return_transaction.id,
+                "reference_number": return_transaction.reference_number,
+                "product_id": data["product_id"],
+                "product_name": product.product_name,
+                "quantity_returned": quantity,
+                "return_amount": str(return_amount),
+                "supplier_owes_us": str(return_amount)
+            },
+            "inventory_impact": {
+                "stock_reduced": True,
+                "new_stock_level": product.quantity_in_stock
+            }
+        }), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.route("/return", methods=["GET"])
+@bp.route("/return/", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
+def list_stock_returns():
+    from stock_transactions.stock_transaction import StockTransaction
+    from suppliers.supplier import Supplier
+    from products.product import Product
+    
+    returns = StockTransaction.query.filter(
+        StockTransaction.transaction_type == 'Return',
+        StockTransaction.supplier_id.isnot(None)
+    ).all()
+    result = []
+    
+    for ret in returns:
+        supplier = Supplier.query.get(ret.supplier_id) if ret.supplier_id else None
+        product = Product.query.get(ret.product_id) if ret.product_id else None
+        
+        return_amount = abs(ret.quantity) * product.purchase_price if product else 0
+        
+        result.append({
+            "return_id": ret.id,
+            "reference_number": ret.reference_number,
+            "supplier_id": ret.supplier_id,
+            "supplier_name": supplier.name if supplier else None,
+            "product_id": ret.product_id,
+            "product_name": product.product_name if product else None,
+            "quantity_returned": abs(ret.quantity),
+            "return_amount": str(return_amount),
+            "supplier_owes_us": str(return_amount),
+            "return_date": ret.transaction_date.isoformat(),
+            "notes": ret.notes
+        })
+    
+    return jsonify(result), 200
 
 
 @bp.route("/", methods=["GET"])
@@ -398,40 +510,6 @@ def get_purchase_details(purchase_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-
-
-@bp.route("/return", methods=["POST"])
-@require_permission_jwt('purchases', 'write')
-@audit_decorator('purchases', 'RETURN')
-def process_purchase_return():
-    data = request.get_json() or {}
-    required = ["purchase_id", "product_id", "quantity", "original_price"]
-    if not all(field in data for field in required):
-        return jsonify({"error": f"Required fields: {required}"}), 400
-
-    from stock_transactions.transaction_service import TransactionService
-    quantity = int(data["quantity"])
-    original_price = Decimal(str(data["original_price"]))
-    refund_amount = quantity * original_price
-
-    transaction_data = {
-        "transaction_type": "Return",
-        "product_id": data["product_id"],
-        "quantity": quantity,
-        "original_price": str(original_price),
-        "reference_number": f"RET-{data['purchase_id']}"
-    }
-
-    try:
-        result = TransactionService.process_transaction(transaction_data)
-        if "error" in result:
-            return jsonify(result), 400
-
-        result["supplier_owes"] = str(refund_amount)
-        return jsonify(result), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 
 @bp.route("/adjustment/", methods=["GET"])
 @require_permission_jwt('purchases', 'read')
@@ -726,28 +804,46 @@ def process_purchase_adjustment():
     old_product = data["old_product"]
     new_product = data["new_product"]
 
-    old_total = Decimal(str(old_product["purchase_price"])) * int(old_product["quantity"])
-    new_total = Decimal(str(new_product["purchase_price"])) * int(new_product["quantity"])
+    # Get product details and calculate prices
+    old_prod = Product.query.get(old_product["product_id"])
+    new_prod = Product.query.get(new_product["product_id"])
+    
+    if not old_prod:
+        return jsonify({"error": "Old product not found"}), 400
+    if not new_prod:
+        return jsonify({"error": "New product not found"}), 400
+
+    # Calculate amounts using actual purchase prices from database
+    old_purchase_price = old_prod.purchase_price
+    new_purchase_price = new_prod.purchase_price
+    old_quantity = int(old_product["quantity"])
+    new_quantity = int(new_product["quantity"])
+    
+    old_total = old_purchase_price * old_quantity
+    new_total = new_purchase_price * new_quantity
     difference = new_total - old_total
 
     try:
         # Update stock for old product (add back)
-        old_prod = Product.query.get(old_product["product_id"])
-        if not old_prod:
-            return jsonify({"error": "Old product not found"}), 400
-        old_prod.quantity_in_stock += old_product["quantity"]
-
+        old_prod.quantity_in_stock += old_quantity
         # Update stock for new product (remove)
-        new_prod = Product.query.get(new_product["product_id"])
-        if not new_prod:
-            return jsonify({"error": "New product not found"}), 400
-        new_prod.quantity_in_stock -= new_product["quantity"]
+        new_prod.quantity_in_stock -= new_quantity
 
-        # Create single adjustment transaction with both products in notes
+        # Create adjustment transaction with calculated amounts
         adjustment_notes = json.dumps({
             "exchange_type": "product_exchange",
-            "old_product": old_product,
-            "new_product": new_product,
+            "old_product": {
+                "product_id": old_product["product_id"],
+                "product_name": old_product["product_name"],
+                "quantity": old_quantity,
+                "purchase_price": str(old_purchase_price)
+            },
+            "new_product": {
+                "product_id": new_product["product_id"],
+                "product_name": new_product["product_name"],
+                "quantity": new_quantity,
+                "purchase_price": str(new_purchase_price)
+            },
             "old_total": str(old_total),
             "new_total": str(new_total),
             "difference_amount": str(abs(difference)),
@@ -755,9 +851,9 @@ def process_purchase_adjustment():
         })
 
         adjustment_transaction = StockTransaction(
-            product_id=new_product["product_id"],  # Use new product as primary
+            product_id=new_product["product_id"],
             transaction_type="Adjustment",
-            quantity=0,  # Net quantity change (handled in stock updates above)
+            quantity=0,
             supplier_id=data["supplier_id"],
             reference_number=f"EXC-{data.get('exchange_id', 1)}",
             notes=adjustment_notes
@@ -770,22 +866,35 @@ def process_purchase_adjustment():
             "adjustment_id": adjustment_transaction.id,
             "exchange_id": data.get("exchange_id", 1),
             "supplier_id": data["supplier_id"],
-            "old_product": old_product,
-            "new_product": new_product,
-            "old_total": str(old_total),
-            "new_total": str(new_total),
+            "old_product": {
+                "product_id": old_product["product_id"],
+                "product_name": old_product["product_name"],
+                "quantity": old_quantity,
+                "purchase_price": str(old_purchase_price),
+                "total_amount": str(old_total)
+            },
+            "new_product": {
+                "product_id": new_product["product_id"],
+                "product_name": new_product["product_name"],
+                "quantity": new_quantity,
+                "purchase_price": str(new_purchase_price),
+                "total_amount": str(new_total)
+            },
             "difference_amount": str(abs(difference))
         }
 
         if difference > 0:
-            result["exchange_type"] = "payable_to_supplier"
+            result["payment_direction"] = "We need to pay supplier"
             result["we_pay_supplier"] = str(difference)
+            result["supplier_pays_us"] = "0.00"
         elif difference < 0:
-            result["exchange_type"] = "receivable_from_supplier"
+            result["payment_direction"] = "Supplier needs to pay us"
             result["supplier_pays_us"] = str(abs(difference))
+            result["we_pay_supplier"] = "0.00"
         else:
-            result["exchange_type"] = "no_payment"
-            result["no_payment_needed"] = True
+            result["payment_direction"] = "No payment needed"
+            result["we_pay_supplier"] = "0.00"
+            result["supplier_pays_us"] = "0.00"
 
         return jsonify(result), 201
     except Exception as e:
@@ -1083,3 +1192,55 @@ def export_purchase_billing_all():
             
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@bp.route("/return/<int:return_id>", methods=["GET"])
+@require_permission_jwt('purchases', 'read')
+def get_return_details(return_id):
+    from stock_transactions.stock_transaction import StockTransaction
+    from suppliers.supplier import Supplier
+    from products.product import Product
+    
+    return_record = StockTransaction.query.filter_by(id=return_id, transaction_type='Return').first()
+    if not return_record:
+        return jsonify({"error": "Return record not found"}), 404
+    
+    supplier = Supplier.query.get(return_record.supplier_id) if return_record.supplier_id else None
+    product = Product.query.get(return_record.product_id) if return_record.product_id else None
+    
+    # Get original purchase details
+    original_purchase = StockTransaction.query.filter_by(
+        product_id=return_record.product_id,
+        supplier_id=return_record.supplier_id,
+        transaction_type='Purchase'
+    ).first()
+    
+    return_amount = abs(return_record.quantity) * product.purchase_price if product else 0
+    
+    return jsonify({
+        "return_id": return_record.id,
+        "reference_number": return_record.reference_number,
+        "supplier": {
+            "id": supplier.id,
+            "name": supplier.name,
+            "contact_person": supplier.contact_person,
+            "phone": supplier.phone,
+            "email": supplier.email
+        } if supplier else None,
+        "product": {
+            "id": product.id,
+            "name": product.product_name,
+            "sku": product.sku,
+            "purchase_price": str(product.purchase_price)
+        } if product else None,
+        "original_purchase": {
+            "purchase_id": original_purchase.id,
+            "reference_number": original_purchase.reference_number,
+            "purchase_date": original_purchase.transaction_date.isoformat(),
+            "quantity_purchased": original_purchase.quantity
+        } if original_purchase else None,
+        "quantity_returned": abs(return_record.quantity),
+        "return_amount": str(return_amount),
+        "supplier_owes_us": str(return_amount),
+        "return_date": return_record.transaction_date.isoformat(),
+        "notes": return_record.notes
+    }), 200

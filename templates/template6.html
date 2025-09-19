@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice {{ invoice.invoice_number }}</title>
+  <style>
+    @page { size: A4; margin: 20mm 15mm 23mm 15mm;}
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5fafd;}
+    .invoice-box { width: 210mm; margin: 26px auto; background: #fff; border-radius: 13px; box-shadow: 0 3px 22px #d1e1ec; overflow: hidden; }
+    .wide-header {
+      width: 100%;
+      background: linear-gradient(90deg, #a0cfd5 0%, #f0e7f6 100%);
+      min-height: 64px;
+      color: #216d76;
+      padding: 20px 34px 10px 34px;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      border-radius: 13px 13px 0 0;
+      box-shadow: 0 2.5px 8px #0001;
+    }
+    .content-block { padding: 18px 34px;}
+    .brand-row { display: flex; align-items: center;}
+    .brand-logo img { width: 60px; height: 60px; border-radius: 13px; background: #f5fafd; }
+    .brand-meta {
+      margin-left: 24px;
+      min-width: 160px;
+      flex: 1;
+    }
+    .brand-name { font-size: 16px; color: #216d76; font-weight: bold;}
+    .brand-slogan { font-size: 11px; color: #ae6fe5;margin-bottom:3px;}
+    .info-details { font-size: 12px; color: #4e858d; }
+    .invoice-section { width: 240px; background: #efecfa; border-radius: 7px;margin-left: 36px; }
+    .invoice-section table { width: 100%;}
+    .invoice-section td { border: none; font-size: 12px; padding: 4px 2px;}
+    .customer-table td { border: none; font-size:12px;}
+    table { width: 100%; border-collapse: collapse; margin-top: 12px;}
+    table, th, td { border: 1.4px solid #ddb8f6; }
+    th { background: #f2ebfe; color: #240763; font-weight: bold; text-align: center;}
+    td { text-align: center;}
+    .item-cell { text-align: left; }
+    .amount-section { background: #f2ebfe;}
+    .total-row { background: #dabdf1; color: #362773;font-weight: bold;}
+    small { font-size: 10px; color: #a972e7;}
+    .status-paid { color: #1aab8a; font-weight: bold;}
+    .status-partial { color: #655009; font-weight: bold;}
+    .status-pending { color: #e04848; font-weight: bold;}
+    .page-footer { margin-top: 30px;}
+  </style>
+</head>
+<body>
+<div class="invoice-box">
+  <!-- Download and Send Mail Buttons -->
+  <div class="no-print" style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
+    <button onclick="downloadPDF()" style="background-color: #2c3e50; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; margin-right: 10px;">
+      📄 Download PDF
+    </button>
+    <button onclick="sendMail()" style="background-color: #27ae60; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">
+      📧 Send Mail
+    </button>
+  </div>
+  <div class="wide-header">INVOICE</div>
+  <div class="content-block">
+    <div class="brand-row">
+      <div class="brand-logo">
+        {% if logo_base64 %}
+        <img src="data:image/jpeg;base64,{{ logo_base64 }}" alt="Company Logo">
+        {% else %}
+        <img src="/addons/DMlogo.jpg" alt="Company Logo">
+        {% endif %}
+      </div>
+      <div class="brand-meta">
+        <div class="brand-name">{{ company_settings.brand_name or 'Brand Name' }}</div>
+        <div class="brand-slogan">{{ company_settings.brand_slogan or 'Brand Slogan' }}</div>
+        <div class="info-details">
+          <b>GSTIN {{ company_settings.gst_number or 'Error' }}</b><br>
+          {{ company_settings.registered_address or 'Error' }}<br>
+          {{ company_settings.state or 'Error' }}, {{ company_settings.postal_code or 'Error' }}
+          {% if company_settings.website %}<br>{{ company_settings.website }}{% endif %}<br>
+          Ph: {{ company_settings.primary_phone or 'Error' }}
+        </div>
+      </div>
+      <div class="invoice-section">
+        <table>
+          <tr>
+            <td><strong>Invoice Number:</strong><br>{{ invoice.invoice_number }}</td>
+            <td><strong>Invoice Id:</strong><br>{{ invoice.id }}</td>
+          </tr>
+          <tr>
+            <td><strong>Invoice Date:</strong><br>{{ invoice.invoice_date[:10] }}</td>
+            <td><strong>Due Date:</strong><br>{{ invoice.due_date[:10] if invoice.due_date else invoice.invoice_date[:10] }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <table style="width: 100%;margin-top:12px;" class="customer-table">
+      <tr>
+        <td class="item-cell" style="width: 50%">
+          <b>{{ customer.id }}</b>, <b>{{ customer.contact_person }}</b><br>
+          <b>Billing address:</b>{{ customer.billing_address or 'Address not provided' }}<br>
+          <b>Ph: </b>{{ customer.phone }}
+          {% if customer.email %}<br><b>Email: </b>{{ customer.email }}{% endif %}
+        </td>
+        <td class="item-cell" style="width: 50%">
+          <b>Shipping address:</b>
+          {{ customer.shipping_address or customer.billing_address or 'Address not provided' }}<br>
+          <b>Branch:</b> {{ customer.branch or 'Not specified' }}
+        </td>
+      </tr>
+    </table>
+    <table>
+      <tr>
+        <th>S.No</th><th class="item-cell">Product Name</th><th>Tax</th><th>Qty</th><th>Rate/Item</th><th>Amount</th>
+      </tr>
+      {% for item in items %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="item-cell">{{ item.product_name }}</td>
+        <td>{{ (item.tax_rate_per_item|float)|round(1) }}%</td>
+        <td>{{ item.quantity }}</td>
+        <td>₹{{ item.unit_price }}</td>
+        <td>₹{{ item.total_price }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div style="width: 100%; display: flex;">
+      <div class="amount-section" style="width: 70%">
+        <p><b>Amount Chargeable (in words):</b><br> INR {{ amount_in_words or 'Amount in words not available' }}.</p>
+        {% if payments %}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+          <div style="flex: 1;">
+            <p class="bold">Payment Details:</p>
+            {% for payment in payments %}
+            <p>
+              • Amount Paid ₹{{ payment.amount_paid }} via {{ payment.payment_method }} <br>• {{ payment.payment_date[:10] }}
+              {% if payment.transaction_reference %} - Ref: {{ payment.transaction_reference }}{% endif %}
+              {% if payment.discount_amount and payment.discount_amount != '0.00' %}
+                (Discount: ₹{{ payment.discount_amount }})
+              {% endif %}
+            </p>
+            {% endfor %}
+            <p class="bold">
+              Total Paid: ₹{{ summary.total_amount_paid }} | Balance Due: ₹{{ summary.balance_due }}
+            </p>
+            {% if summary.total_excess_amount and summary.total_excess_amount != '0.00' %}
+            <p class="bold" style="color: blue;">
+              Excess Amount: ₹{{ summary.total_excess_amount }}
+            </p>
+            {% endif %}
+          </div>
+          <div style="display: flex; align-items: center; justify-content: center; min-width: 200px; margin-right: 45px; margin-bottom: 30px">
+            <h2 style="font-size: 20px; font-weight: bold; margin: 0; color: black; text-align: right;">
+              PAYMENT : <span class="{% if invoice.status == 'Paid' %}status-paid{% elif invoice.status == 'Pending' %}status-pending{% elif invoice.status == 'Cancelled' %}status-cancelled{% endif %}">{{ invoice.status|upper }}</span>
+            </h2>
+          </div>
+        </div>
+        {% else %}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+          <p class="bold">Payment Status: {{ summary.payment_status }} | Balance Due: ₹{{ summary.balance_due }}</p>
+        </div>
+        {% endif %}
+      </div>
+      <table style="width: 30%; border: 1.4px solid #ddb8f6; margin-left: auto;">
+        <tr>
+          <td colspan="8" class="right bold">Taxable Amount</td>
+          <td class="bold">₹{{ "%.2f"|format(calculations.subtotal|float) }}</td>
+        </tr>
+        {% set total_tax = invoice.tax_amount|float %}
+        {% if total_tax > 0 %}
+        <tr>
+          <td colspan="8" class="right">CGST 9.0%</td>
+          <td class="right">₹{{ "%.2f"|format(total_tax / 2) }}</td>
+        </tr>
+        <tr>
+          <td colspan="8" class="right">SGST 9.0%</td>
+          <td class="right">₹{{ "%.2f"|format(total_tax / 2) }}</td>
+        </tr>
+        {% endif %}
+        {% if invoice.discount_amount and invoice.discount_amount != '0.00' %}
+        <tr>
+          <td colspan="8" class="right">Discount</td>
+          <td class="right">-₹{{ "%.2f"|format(invoice.discount_amount|float) }}</td>
+        </tr>
+        {% endif %}
+        {% if invoice.shipping_charges and invoice.shipping_charges != '0.00' %}
+        <tr>
+          <td colspan="8" class="right">Shipping Charges</td>
+          <td class="right">₹{{ "%.2f"|format(invoice.shipping_charges|float) }}</td>
+        </tr>
+        {% endif %}
+        {% if invoice.other_charges and invoice.other_charges != '0.00' %}
+        <tr>
+          <td colspan="8" class="right">Other Charges</td>
+          <td class="right">₹{{ "%.2f"|format(invoice.other_charges|float) }}</td>
+        </tr>
+        {% endif %}
+        <tr class="total-row">
+          <td colspan="8" class="bold right">Grand Total</td>
+          <td class="bold">₹{{ calculations.grand_total }}</td>
+        </tr>
+      </table>
+    </div>
+    <div class="page-footer">
+      <table class="item-cell" style="width:100%; border-collapse: collapse;">
+        <tr>
+          <td style="text-align: left; vertical-align: top; padding: 5px;">
+            <b>Bank Details:</b><br>
+            {% if payments and payments[0].bank_details %}
+            {{ payments[0].bank_details }}
+            {% else %}
+            Bank Name: {{ company_settings.bank_name }}<br>
+            Account : {{ company_settings.account_number }}<br>
+            IFSC: {{ company_settings.ifsc_code }}<br>
+            Branch: {{ company_settings.branch }}
+            {% endif %}
+          </td>
+          <td style="text-align: left; vertical-align: top; padding: 5px;">
+            <b>Terms and Conditions:</b><br>
+            1. Goods once sold cannot be taken back or exchanged.<br>
+            2. We are not the manufacturers, company will stand for warranty as per their terms and conditions.<br>
+            3. Interest @24% p.a. will be charged for uncleared bills beyond 15 days.<br>
+            4. Subject to local Jurisdiction.<br>
+            {% if customer.payment_terms %}5. Payment Terms: {{ customer.payment_terms }}<br>{% endif %}
+            {% if invoice.payment_terms %}6. Invoice Payment Terms: {{ invoice.payment_terms }}{% endif %}
+          </td>
+        </tr>
+      </table>
+      <p class="center">This is a digitally signed document.<br>
+      Generated on: {{ generated_at or 'N/A' }}<br>
+      <small>Invoice ID: {{ invoice_id }} | Currency: {{ currency or 'INR' }}
+      {% if invoice.updated_at %} | Last Updated: {{ invoice.updated_at[:10] }}{% endif %}</small></p>
+    </div>
+  </div>
+</div>
+<script>
+function downloadPDF() {
+  window.print();
+}
+
+function sendMail() {
+  const invoiceId = '{{ invoice.id }}';
+  const customerEmail = '{{ customer.email }}';
+  
+  if (!customerEmail) {
+    alert('Customer email not available');
+    return;
+  }
+  
+  if (confirm(`Send invoice to ${customerEmail}?`)) {
+    fetch('/send-invoice-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        invoice_id: invoiceId,
+        email: customerEmail
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert('Invoice sent successfully!');
+      } else {
+        alert('Failed to send invoice: ' + data.message);
+      }
+    })
+    .catch(error => {
+      alert('Error sending invoice: ' + error.message);
+    });
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice {{ invoice.invoice_number }}</title>
+  <style>
+    @page { size: A4; margin: 18mm 12mm 22mm 12mm; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f7fa; }
+    .invoice-box {
+      width: 220mm;
+      margin: 0 auto 20px auto;
+      background: #fff;
+      border-radius: 15px;
+      box-shadow: 0 2px 16px #d5e5f5;
+      overflow: hidden;
+      padding-bottom: 15px;
+      position: relative;
+    }
+    .header-curve {
+      background: #6c88af;
+      height: 155px;
+      border-bottom-left-radius: 100px 40px;
+      border-bottom-right-radius: 80px 70px;
+      position: relative;
+    }
+    .header-content {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      position: relative;
+      padding: 24px 45px 0 45px;
+    }
+    .brand-logo img {
+      height: 56px;
+      margin-top: 17px;
+    }
+    .invoice-title-section {
+      text-align: right;
+      margin-top: 12px;
+    }
+    .invoice-title-section h1 {
+      color: #222;
+      font-size: 38px;
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: 2px;
+    }
+    .invoice-meta {
+      color: #222;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    .main-card {
+      margin: 15px 32px 0 32px;
+      /background: #fff;/
+      /border-radius: 10px;/
+      /box-shadow: 0 1.5px 8px #e4e4f9;/
+      padding: 26px 32px 20px 32px;
+      position: relative;
+      z-index: 10;
+    }
+    .info-flex {
+      display: flex;
+      justify-content: space-between;
+      background: #f3f3f3;
+      border-radius: 6px;
+      padding: 18px 20px 18px 20px;
+      margin-bottom: 18px;
+    }
+    .info-block {
+      color: #444;
+      font-size: 14px;
+      line-height: 1.58;
+    }
+    .info-block strong {
+      color: #222;
+      font-size: 16px;
+    }
+    .section-label {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 23px 0 6px 0;
+      color: #334c65;
+      letter-spacing: .8px;
+    }
+    .main-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      margin-bottom: 35px;
+    }
+    .main-table th, .main-table td {
+      border: 1px solid #c7d2e2;
+      padding: 10px 8px;
+      font-size: 14px;
+      text-align: center;
+    }
+    .main-table th {
+      background: #6c88af;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 500;
+      border-bottom: 3px solid #34517c;
+    }
+    .main-table tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+    .main-table td.item-cell {
+      text-align: left;
+    }
+    .pay-amounts {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+      margin-bottom: 16px;
+      align-items: flex-end;
+    }
+    .amount-summary {
+      font-size: 15px;
+      color: #444;
+      margin-right: 32px;
+    }
+    .amount-summary b {
+      color: #263a55;
+      min-width: 96px;
+      display: inline-block;
+    }
+    .total-box {
+      background: #263a55;
+      color: #fff;
+      padding: 11px 24px;
+      border-radius: 5px;
+      font-size: 18px;
+      font-weight: 600;
+      display: inline-block;
+      min-width: 180px;
+      text-align: right;
+      box-shadow: 0 1px 8px #d5e1fa44;
+    }
+    .main-footer {
+      margin: 28px 0 0 0;
+      padding: 0 32px 0 32px;
+    }
+    .footer-flex { display: flex; justify-content: space-between; }
+    .payment-info { font-size: 14px; color: #263a55;}
+    .footer-note { margin-top: 17px; color: #757575; font-size: 13px; }
+    .footer-links {
+      text-align: right;
+      margin-top: 38px;
+      color: #577da7;
+      font-size: 13px;
+    }
+    .footer-links div { margin-bottom: 4px;}
+    .icon-controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      margin-top: 18px;
+    }
+    .btn-icon {
+      background: #e8ecf2;
+      border: none;
+      outline: none;
+      border-radius: 7px;
+      font-size: 19px;
+      padding: 10px 18px;
+      color: #285088;
+      cursor: pointer;
+      box-shadow: 0 2px 8px #cfd9ea44;
+      margin-left: 2px;
+      margin-right: 2px;
+      transition: background .12s;
+    }
+    .btn-icon:hover {
+      background:#d4e2f8;
+    }
+  </style>
+</head>
+<body>
+<div class="invoice-box">
+  <!-- Download and Send Mail Buttons -->
+  <div class="no-print" style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
+    <button onclick="downloadPDF()" style="background-color: #2c3e50; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; margin-right: 10px;">
+      📄 Download PDF
+    </button>
+    <button onclick="sendMail()" style="background-color: #27ae60; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">
+      📧 Send Mail
+    </button>
+  </div>
+  <div class="header-curve">
+    <div class="header-content">
+      <div class="brand-logo">
+        {% if logo_base64 %}
+        <img src="data:image/jpeg;base64,{{ logo_base64 }}" alt="Company Logo">
+        {% else %}
+        <img src="/addons/DMlogo.jpg" alt="Company Logo">
+        {% endif %}
+      </div>
+      <div class="invoice-title-section">
+        <h1>INVOICE</h1>
+        <div class="invoice-meta">
+          <strong>Invoice No:</strong> {{ invoice.invoice_number }}<br>
+          <strong>Date:</strong> {{ invoice.invoice_date[:10] }}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="main-card">
+    <div class="info-flex">
+      <div class="info-block">
+        <strong>Invoice To:</strong><br>
+        {{ customer.contact_person }}<br>
+        {{ customer.billing_address or 'Address not provided' }}
+      </div>
+      <div class="info-block" style="text-align:right;">
+        <strong>{{ company_settings.brand_name or 'Shop' }}</strong><br>
+        {{ company_settings.registered_address or 'Address not provided' }}<br>
+        {% if company_settings.email %}{{ company_settings.email }}<br>{% endif %}
+        {% if company_settings.primary_phone %}{{ company_settings.primary_phone }}{% endif %}
+      </div>
+    </div>
+    <div style="display:flex; justify-content:space-between;">
+      <div>
+        <div class="section-label">Order Date:</div>
+        <div>{{ invoice.order_date or invoice.invoice_date[:10] }}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="section-label">Payment Method:</div>
+        <div>{{ invoice.payment_method or 'N/A' }}</div>
+      </div>
+    </div>
+    <table class="main-table">
+      <tr>
+        <th>S.No</th>
+        <th>Product Description</th>
+        <th>Price</th>
+        <th>Qty</th>
+        <th>Amount</th>
+      </tr>
+      {% for item in items %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="item-cell">{{ item.product_name }}</td>
+        <td>{{ item.unit_price }}</td>
+        <td>{{ item.quantity }}</td>
+        <td>{{ item.total_price }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="pay-amounts">
+      <div class="amount-summary">
+        <b>Sub Total:</b> ₹{{ calculations.subtotal or '0.00' }}<br>
+        <b>Tax:</b> {{ calculations.tax_percent or '0' }}%
+      </div>
+      <div class="total-box">
+        Total: ₹{{ calculations.grand_total or '0.00' }}
+      </div>
+    </div>
+    <div class="footer-flex">
+      <div class="payment-info">
+        <b>Payment Info:</b><br>
+        Account : {{ summary.account_number or '—' }}<br>
+        A/C Name : {{ summary.account_name or customer.contact_person }}
+      </div>
+    </div>
+    <div class="footer-note">
+      <b>NOTE:</b> This is computer generated receipt and does not require physical signature.
+    </div>
+
+    <div class="footer-links">
+      <div>{{ company_settings.website or 'yourdomain.com' }}</div>
+      {% if company_settings.primary_phone %}<div>{{ company_settings.primary_phone }}</div>{% endif %}
+      {% if company_settings.email %}<div>{{ company_settings.email }}</div>{% endif %}
+    </div>
+  </div>
+</div>
+<script>
+function downloadPDF() {
+  window.print();
+}
+
+function sendMail() {
+  const invoiceId = '{{ invoice.id }}';
+  const customerEmail = '{{ customer.email }}';
+  
+  if (!customerEmail) {
+    alert('Customer email not available');
+    return;
+  }
+  
+  if (confirm(`Send invoice to ${customerEmail}?`)) {
+    fetch('/send-invoice-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        invoice_id: invoiceId,
+        email: customerEmail
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert('Invoice sent successfully!');
+      } else {
+        alert('Failed to send invoice: ' + data.message);
+      }
+    })
+    .catch(error => {
+      alert('Error sending invoice: ' + error.message);
+    });
+  }
+}
+</script>
+</body>
+</html>

@@ -11,6 +11,7 @@ from invoices.invoice_item import InvoiceItem
 from payments.payment import Payment
 from products.product import Product
 from purchases.purchase_bill import PurchaseBill
+from purchases.supplier_damage import SupplierDamage
 from reports.report import Report
 from returns.product_return import ProductReturn, DamagedProduct
 from sales_no_invoice.sale_no_invoice import SaleNoInvoice

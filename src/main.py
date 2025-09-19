@@ -17,6 +17,7 @@ from routes import register_routes
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres@127.0.0.1:5432/store_db"
     app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
     app.config['SESSION_TYPE'] = 'filesystem'
 
@@ -35,9 +36,22 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     mail.init_app(app)
+    
+    # Import all models within app context to resolve relationships
+    with app.app_context():
+        from customers.customer import Customer
+        from invoices.invoice import Invoice
+        from invoices.invoice_item import InvoiceItem
+        from payments.payment import Payment
+        from products.product import Product
+        from suppliers.supplier import Supplier
+        from category.category import Category, SubCategory
+        from stock_transactions.stock_transaction import StockTransaction
 
     # register routes/blueprints
     register_routes(app)
+    
+
 
     @app.get("/")
     def index():
@@ -66,29 +80,68 @@ def create_app():
 
     return app
 
-if __name__ == "__main__":
-    # Start embedded PostgreSQL
-    pg_ctl = Path("f:/Bills/my_embedded_pg/bin/pg_ctl.exe")
-    data_dir = Path("f:/Bills/my_embedded_pg/data")
+
+
+# PostgreSQL Management
+PG_ROOT = "G:\\Bills\\my_embedded_pg"
+PG_BIN = os.path.join(PG_ROOT, "bin")
+PG_DATA = os.path.join(PG_ROOT, "data")
+PG_PORT = "5432"
+
+def is_postgres_running():
+    pg_ctl = os.path.join(PG_BIN, "pg_ctl.exe")
+    try:
+        result = subprocess.run([
+            pg_ctl, "-D", PG_DATA, "status"
+        ], capture_output=True, text=True)
+        return result.returncode == 0
+    except:
+        return False
+
+def start_postgres():
+    pg_ctl = os.path.join(PG_BIN, "pg_ctl.exe")
+    if not os.path.exists(pg_ctl):
+        print("ERROR: pg_ctl.exe not found.")
+        return
+    
+    if is_postgres_running():
+        print(f"PostgreSQL is already running on port {PG_PORT}")
+        return
     
     try:
-        print("Starting embedded PostgreSQL...")
-        result = subprocess.run([str(pg_ctl), "start", "-D", str(data_dir)], 
-                              capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            print("PostgreSQL started successfully")
-        else:
-            print(f"PostgreSQL start warning: {result.stderr}")
-    except subprocess.TimeoutExpired:
-        print("PostgreSQL start timeout - continuing anyway")
+        subprocess.Popen([
+            pg_ctl, "-D", PG_DATA, "-l", os.path.join(PG_ROOT, "postgres.log"),
+            "-o", f"-p {PG_PORT}", "start"
+        ])
+        print(f"Starting PostgreSQL on port {PG_PORT}...")
     except Exception as e:
-        print(f"PostgreSQL start error: {e} - continuing anyway")
+        print(f"Failed to start embedded Postgres: {e}")
+
+def stop_postgres():
+    if not is_postgres_running():
+        return
     
+    pg_ctl = os.path.join(PG_BIN, "pg_ctl.exe")
+    try:
+        subprocess.run([
+            pg_ctl, "-D", PG_DATA, "stop", "-m", "fast"
+        ], check=True, capture_output=True)
+        print("PostgreSQL stopped")
+    except:
+        pass  # Already stopped or failed
+
+if __name__ == "__main__":
     import logging
     import smtplib
+    import atexit
+    
     logging.getLogger('smtplib').setLevel(logging.ERROR)
     smtplib.SMTP.debuglevel = 0
     
-    print("Starting Flask application...")
+    # Only start PostgreSQL in main process, not in Flask reloader
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        start_postgres()
+        atexit.register(stop_postgres)
+    
     app = create_app()
     app.run(host="0.0.0.0", port=5000, debug=app.config["DEBUG"])

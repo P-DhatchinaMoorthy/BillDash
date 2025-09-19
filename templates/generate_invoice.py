@@ -6,6 +6,7 @@ from jinja2 import Environment, FileSystemLoader
 import pdfkit
 import webbrowser
 from datetime import datetime
+from flask import render_template, abort
 
 def fetch_invoice_data(invoice_id, base_url="http://localhost:5000"):
     """
@@ -15,7 +16,7 @@ def fetch_invoice_data(invoice_id, base_url="http://localhost:5000"):
         url = f"{base_url}/payments/invoice/{invoice_id}/details"
         print(f"Fetching data from: {url}")
         
-        response = requests.get(url)
+        response = requests.get(url, timeout=30)
         if response.status_code != 200:
             raise Exception(f"API returned status {response.status_code}: {response.text}")
         
@@ -141,6 +142,32 @@ def main():
     else:
         print(f"\n❌ Failed to generate invoice: {result['error']}")
         sys.exit(1)
+
+def get_invoice_with_template(invoice_id, template_name="invoice_template"):
+    """
+    Route handler for dynamic template selection
+    """
+    available_templates = [
+        "invoice_template", "template1", "template2", "template3", "template4", 
+        "template5", "template6", "template7", "template8", "template9", 
+        "template10", "template11"
+    ]
+    
+    if template_name not in available_templates:
+        abort(404)
+    
+    try:
+        invoice_data = fetch_invoice_data(invoice_id)
+        template_path = os.path.dirname(__file__)
+        env = Environment(loader=FileSystemLoader(template_path), autoescape=True)
+        template = env.get_template(f'{template_name}.html')
+        invoice_data['generated_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return template.render(**invoice_data)
+    except Exception as e:
+        return f"Error: {str(e)}", 500
+
+# Flask route registration function
+# This file is no longer needed - routes are handled in invoice_web_routes.py
 
 if __name__ == "__main__":
     main()

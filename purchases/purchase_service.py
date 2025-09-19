@@ -1,6 +1,6 @@
 # services/purchase_service.py
 from decimal import Decimal
-from extensions import db
+from src.extensions import db
 from products.product import Product
 from stock_transactions.stock_transaction import StockTransaction
 from datetime import datetime

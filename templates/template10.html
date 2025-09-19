@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice {{ invoice.invoice_number }}</title>
+  <style>
+    @page { size: A4; margin: 18mm 15mm 22mm 15mm; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f9f9fa; }
+    .invoice-box { width: 210mm; margin: 0 auto 24px auto; background: #fff; border-radius: 15px; box-shadow: 0 2px 20px #e8dde0; overflow: hidden; padding-bottom: 18px; position: relative;}
+    .header-red {
+      display: flex; position: relative; width: 100%; height: 70px; margin-bottom: 22px;
+    }
+    .header-red-left {
+      background: #e2252a; color: #fff; width: 330px; display:flex; align-items: center; justify-content: left;
+      height:70px; border-bottom-right-radius: 31px 80px; font-size: 36px; font-weight: 700; letter-spacing: 1.7px; padding-left: 36px;
+    }
+    .header-red-right {
+      background: #222; color: #fff; height:36px; border-top-right-radius: 8px 32px;
+      position: absolute; top:0; right:0; width: 420px;
+    }
+    .header-red-brand {
+      position: absolute; right: 36px; top: 13px; display:flex; align-items: center; gap:12px;
+    }
+    .header-red-brand img { height:32px; }
+    .header-red-title-meta {
+      position:absolute; right:46px; top:46px; background:#fff; color:#e2252a;
+    }
+    .invoice-meta {
+      margin-top: 0; margin-left: 8px; color: #222; font-size: 15px;
+    }
+    .invoice-meta b { color: #e2252a;}
+    .main-content { padding: 0 40px 0 40px; }
+    .panel-flex { display: flex; justify-content: space-between; margin-top: 18px; margin-bottom: 16px;}
+    .info-block { color: #222; font-size: 15px; line-height: 1.55;}
+    .info-block strong { font-size: 17px; color:#111;}
+    .info-block-right { text-align:right; }
+    .table-invoice {
+      width: 100%; border-collapse: collapse; margin: 18px 0 35px 0; border-radius: 7px 7px 7px 7px; overflow:hidden;
+    }
+    .table-invoice th, .table-invoice td {
+      border-bottom: 1px solid #ededed; font-size: 16px; padding: 13px 9px; text-align: center;
+    }
+    .table-invoice th {
+      background: #e2252a; color: #fff; font-weight: 700; border: none;
+      letter-spacing: 1px;
+    }
+    .table-invoice td.item-cell { text-align: left;}
+    .table-invoice tr:last-child td { border-bottom: 0;}
+    .terms-row { margin-top: 20px; margin-bottom: 20px;margin-left:430px;width:100%; display: flex; justify-content: space-between;}
+    .terms-block { width: 55%; color: #222;}
+    .terms-block strong { font-size: 18px;}
+    .summary-block { width: 36%; text-align: right; font-size: 16px;}
+    .summary-block div {margin: 8px 0;}
+    .summary-block label { color: #444; font-weight: 600; min-width:120px; display:inline-block;}
+    .summary-block .total { font-size: 20px; font-weight: 700; color: #e2252a; border-top: 2px solid #ccc; margin-top: 13px; padding-top:14px;}
+    .note-block { margin-top: 18px; color:#555;font-size:14px;}
+    .icon-controls { display: flex; justify-content: center; align-items: center; gap: 16px; margin: 34px 0 18px 0;}
+    .btn-icon { background: #ffeaea; border: none; outline: none; border-radius: 7px; font-size: 19px; padding: 13px 22px; color: #e2252a; cursor: pointer; box-shadow: 0 2px 16px #e4d1d1; transition: background .13s;}
+    .btn-icon:hover { background:#e2252a; color:#fff;}
+    .footer-bar {
+      width:100%; height:15px;
+      background: #e2252a;
+      border-radius:0 0 16px 16px;
+      margin-top:24px;
+    }
+    @media print {
+      .btn-icon, .icon-controls { display:none !important;}
+    }
+  </style>
+</head>
+<body>
+<div class="invoice-box">
+  <!-- Download and Send Mail Buttons -->
+  <div class="no-print" style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
+    <button onclick="downloadPDF()" style="background-color: #2c3e50; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; margin-right: 10px;">
+      📄 Download PDF
+    </button>
+    <button onclick="sendMail()" style="background-color: #27ae60; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">
+      📧 Send Mail
+    </button>
+  </div>
+  <div class="header-red">
+    <div class="header-red-left">INVOICE</div>
+    <div class="header-red-right"></div>
+    <div class="header-red-brand">
+      {% if logo_base64 %}
+      <img src="data:image/jpeg;base64,{{ logo_base64 }}" alt="Brand Logo">
+      {% else %}
+      <img src="/addons/DMlogo.jpg" alt="Brand Logo">
+      {% endif %}
+      <span style="font-size:28px;font-weight:700;color:#fff;">{{ company_settings.brand_name  }}</span>
+    </div>
+    <div class="header-red-title-meta" style="right:36px;top:96px;">
+      <div class="invoice-meta"><b>Invoice No:</b> #{{ invoice.invoice_number }}</div>
+      <div class="invoice-meta"><b>Date:</b> {{ invoice.invoice_date[:10] }}</div>
+    </div>
+  </div>
+  <div class="main-content">
+    <div class="panel-flex">
+      <div class="info-block">
+        <strong>Invoiced To:</strong><br>
+        {{ customer.contact_person }}<br>
+        {{ customer.billing_address or '—' }}
+      </div>
+      <div class="info-block info-block-right">
+         <div class="brand-info">
+      <div class="brand-slogan">{{ company_settings.brand_slogan }}</div>
+      <div class="header-details">
+        <b>GSTIN {{ company_settings.gst_number or 'Error' }}</b><br>
+        {{ company_settings.registered_address or 'Error' }}<br>
+        {{ company_settings.state or 'Error' }}, {{ company_settings.postal_code or 'Error' }}
+        {% if company_settings.website %}<br>{{ company_settings.website }}{% endif %}<br>
+        Ph: {{ company_settings.primary_phone or 'Error' }}
+      </div>
+    </div>
+
+      </div>
+    </div>
+    <table class="table-invoice">
+      <tr>
+        <th>SL</th>
+        <th>Item Description</th>
+        <th>Price</th>
+        <th>Qty</th>
+        <th>Total</th>
+      </tr>
+      {% for item in items %}
+      <tr>
+        <td>{{ "%02d"|format(loop.index) }}</td>
+        <td class="item-cell">{{ item.product_name }}</td>
+        <td>{{ item.unit_price }}</td>
+        <td>{{ item.quantity }}</td>
+        <td>{{ item.total_price }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="terms-row">
+
+
+     <div class="summary-block" >
+        <div><label>Sub Total:</label> ₹{{ calculations.subtotal or '0.00' }}</div>
+        <div><label>Tax:</label> ₹{{ calculations.tax or '0.00' }}</div>
+        <div class="total">Total: ₹{{ calculations.grand_total or summary.total_paid or '0.00' }}</div>
+      </div>
+  </div>
+  <div class="page-footer">
+      <table class="item-cell" style="width:100%; border-collapse: collapse; font-size: 12px">
+        <tr>
+          <td style="text-align: left; vertical-align: top; padding: 5px;">
+            <b>Bank Details:</b><br>
+            {% if payments and payments[0].bank_details %}
+            {{ payments[0].bank_details }}
+            {% else %}
+            Bank Name: {{ company_settings.bank_name }}<br>
+            Account : {{ company_settings.account_number }}<br>
+            IFSC: {{ company_settings.ifsc_code }}<br>
+            Branch: {{ company_settings.branch }}
+            {% endif %}
+          </td>
+          <td style="text-align: left; vertical-align: top; padding: 5px;">
+            <b>Terms and Conditions:</b><br>
+            1. Goods once sold cannot be taken back or exchanged.<br>
+            2. We are not the manufacturers, company will stand for warranty as per their terms and conditions.<br>
+            3. Interest @24% p.a. will be charged for uncleared bills beyond 15 days.<br>
+            4. Subject to local Jurisdiction.<br>
+            {% if customer.payment_terms %}5. Payment Terms: {{ customer.payment_terms }}<br>{% endif %}
+            {% if invoice.payment_terms %}6. Invoice Payment Terms: {{ invoice.payment_terms }}{% endif %}
+          </td>
+        </tr>
+      </table>
+  </div>
+      <div style="margin-left: 50px; font-size: 12px">
+      <p class="center">This is a digitally signed document.
+      Generated on: {{ generated_at or 'N/A' }}
+      <small>Invoice ID: {{ invoice_id }} | Currency: {{ currency or 'INR' }}
+      {% if invoice.updated_at %} | Last Updated: {{ invoice.updated_at[:10] }}{% endif %}</small></p>
+    </div>
+</div>
+    </div>
+
+  </div>
+
+</div>
+<script>
+function downloadPDF() {
+  window.print();
+}
+
+function sendMail() {
+  const invoiceId = '{{ invoice.id }}';
+  const customerEmail = '{{ customer.email }}';
+  
+  if (!customerEmail) {
+    alert('Customer email not available');
+    return;
+  }
+  
+  if (confirm(`Send invoice to ${customerEmail}?`)) {
+    fetch('/send-invoice-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        invoice_id: invoiceId,
+        email: customerEmail
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert('Invoice sent successfully!');
+      } else {
+        alert('Failed to send invoice: ' + data.message);
+      }
+    })
+    .catch(error => {
+      alert('Error sending invoice: ' + error.message);
+    });
+  }
+}
+</script>
+</body>
+</html>
