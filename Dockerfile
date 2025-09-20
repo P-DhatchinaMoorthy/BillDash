@@ -2,25 +2,38 @@
 FROM python:3.12-slim
 
 # Set working directory
-WORKDIR /src
+WORKDIR /app
 
-# Install system dependencies (optional but recommended for many Python packages)
+# Install system dependencies required for your Python packages
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
+    wkhtmltopdf \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency list first (better caching)
+# Copy requirements file first (better caching)
 COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project files
+# Copy the entire backend project
 COPY . .
 
-# Expose port (Render expects 10000 or 8000 typically)
-EXPOSE 8000
+# Create necessary directories
+RUN mkdir -p /app/addons /app/data
 
-# Start command (adjust this if your entry point differs)
-CMD ["python", "main.py"]
+# Set environment variables
+ENV FLASK_APP=src/main.py
+ENV FLASK_ENV=production
+ENV PYTHONPATH=/app
+
+# Expose port
+EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/api/test || exit 1
+
+# Start command
+CMD ["python", "src/main.py"]
